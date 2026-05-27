@@ -21,9 +21,6 @@ import {
   TrendingDown,
   Minus,
   Calendar,
-  MapPin,
-  Store,
-  Upload,
   Box,
   Settings,
   ChevronRight,
@@ -36,7 +33,6 @@ import {
   Loader2,
   ChevronLeft,
   Filter,
-  Download,
   RefreshCw,
   Activity,
   Clock,
@@ -48,15 +44,80 @@ import {
 } from "lucide-react";
 
 // ==========================================
+// TYPES & INTERFACES (TypeScript Definitions)
+// ==========================================
+
+export interface DataItem {
+  ticket_no: string;
+  date: string;
+  branch_id: string;
+  branch_name: string;
+  area: string;
+  team: string;
+  equipment: string;
+  product_type: string;
+  system: string;
+  problem_type: string;
+  damaged_parts: string;
+  cause: string;
+  equipment_age: string;
+  repeat_call: string;
+  month: string;
+}
+
+export interface MonthHistory {
+  month: string;
+  count: number;
+  rank: number;
+  calls: DataItem[];
+}
+
+export interface BranchTableItem {
+  branch_id: string;
+  branch_name: string;
+  area: string;
+  team: string;
+  rank: number;
+  movement: number;
+  max_age: number;
+  total_calls: number;
+  history: MonthHistory[];
+  allCalls: DataItem[];
+}
+
+export interface OptionItem {
+  id: string;
+  label: string;
+}
+
+export interface CallDetails {
+  month: string;
+  branchName: string;
+  branchId: string;
+  area: string;
+  team: string;
+  calls: DataItem[];
+  isTotal: boolean;
+}
+
+export interface ModalFilter {
+  type: "productType" | "system" | "problemType" | null;
+  value: string | null;
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  url: string;
+}
+
+// ==========================================
 // 1. HELPER FUNCTIONS
 // ==========================================
 
-// ✅ CSV Parser V3 (CodeSandbox Infinite-Loop Bypass Edition)
-// ใช้ Array methods เพื่อหลีกเลี่ยงการถูก CodeSandbox บล็อกลูปเกิน 100,000 รอบ
-const parseCSV = (csvText: string) => {
-  const rows: any[][] = [];
-  // แก้จาก let row = [];
-  let row: any[] = [];
+const parseCSV = (csvText: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let inQuotes = false;
   let currentValue = "";
 
@@ -64,7 +125,6 @@ const parseCSV = (csvText: string) => {
 
   lines.forEach((line) => {
     line = line.replace(/\r$/, "");
-
     const chars = line.split("");
     let skipNext = false;
 
@@ -90,7 +150,7 @@ const parseCSV = (csvText: string) => {
     });
 
     if (inQuotes) {
-      currentValue += "\n"; // หากยังอยู่ในเครื่องหมายคำพูด ให้ต่อบรรทัดใหม่
+      currentValue += "\n";
     } else {
       row.push(currentValue);
       if (row.some((val) => val.trim() !== "")) {
@@ -104,7 +164,7 @@ const parseCSV = (csvText: string) => {
   return rows;
 };
 
-const formatMonthLabel = (YYYYMM: string) => {
+const formatMonthLabel = (YYYYMM: string): string => {
   if (!YYYYMM) return "";
   const parts = YYYYMM.split("-");
   if (parts.length < 2) return YYYYMM;
@@ -114,11 +174,10 @@ const formatMonthLabel = (YYYYMM: string) => {
   return date.toLocaleDateString("th-TH", { month: "short", year: "2-digit" });
 };
 
-// ปรับปรุงไม่ให้ใช้ for loop ลดการแจ้งเตือนจาก Sandbox
-const parseDateToTimestamp = (dateStr: string) => {
+const parseDateToTimestamp = (dateStr: string): number => {
   if (!dateStr || dateStr === "-") return 0;
 
-  const thaiMonthsObj = {
+  const thaiMonthsObj: Record<string, number> = {
     "ม.ค.": 0,
     "ก.พ.": 1,
     "มี.ค.": 2,
@@ -167,20 +226,17 @@ const parseDateToTimestamp = (dateStr: string) => {
       let p0 = parseInt(dParts[0], 10);
       let p1 = parseInt(dParts[1], 10);
       let p2 = parseInt(dParts[2], 10);
-      let d, m, y;
+      let d: number, m: number, y: number;
 
       if (dParts[0].length === 4) {
-        // รูปแบบ YYYY/MM/DD
         y = p0;
         m = p1 - 1;
         d = p2;
       } else if (p0 > 12) {
-        // รูปแบบ DD/MM/YYYY (เช่น 30/1/2026)
         d = p0;
         m = p1 - 1;
         y = p2;
       } else {
-        // รูปแบบ MM/DD/YYYY (เช่น 1/30/2026 หรือ 2/24/2026 ตามในภาพ)
         m = p0 - 1;
         d = p1;
         y = p2;
@@ -207,38 +263,46 @@ const parseDateToTimestamp = (dateStr: string) => {
 
 const getRankColor = (rank: number, count: number): string => {
   if (count === 0 || rank === 0)
-    return "bg-slate-800/40 text-slate-400 border-slate-700/50";
+    return "bg-slate-100 text-slate-400 border-slate-200";
   if (rank === 1)
-    return "bg-yellow-500 text-slate-950 font-black border-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)] cursor-pointer hover:scale-105 transition-transform";
+    return "bg-yellow-500 text-slate-950 font-black border-yellow-400 shadow-[0_4px_15px_rgba(234,179,8,0.2)] cursor-pointer hover:scale-105 transition-transform";
   if (rank <= 3)
-    return "bg-red-600 text-white font-bold border-red-500 cursor-pointer hover:scale-105 transition-transform";
+    return "bg-red-600 text-white font-bold border-red-500 cursor-pointer hover:scale-105 transition-transform shadow-[0_4px_12px_rgba(220,38,38,0.2)]";
   if (rank <= 10)
     return "bg-orange-600 text-white border-orange-500 cursor-pointer hover:scale-105 transition-transform";
   if (rank <= 20)
     return "bg-indigo-600 text-white border-indigo-500 cursor-pointer hover:scale-105 transition-transform";
-  return "bg-slate-700 text-white border-slate-500 cursor-pointer hover:scale-105 transition-transform";
+  return "bg-slate-500 text-white border-slate-400 cursor-pointer hover:scale-105 transition-transform";
 };
 
 // ==========================================
 // 2. MULTI-SELECT COMPONENT
 // ==========================================
-const MultiSearchSelect = React.memo(
+interface MultiSearchSelectProps {
+  label: string;
+  options: (string | OptionItem)[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+}
+
+const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
   ({ label, options, selectedValues, onChange, placeholder = "ค้นหา..." }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const containerRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const filteredOptions = useMemo(() => {
       const term = searchTerm.toLowerCase();
       return options.filter((opt) => {
-        const labelStr = (opt.label || opt.name || opt || "")
-          .toString()
-          .toLowerCase();
-        return labelStr.includes(term);
+        if (typeof opt === "string") {
+          return opt.toLowerCase().includes(term);
+        }
+        return (opt.label || "").toString().toLowerCase().includes(term);
       });
     }, [options, searchTerm]);
 
-    const toggleValue = (val) => {
+    const toggleValue = (val: string) => {
       if (val === "ALL") {
         onChange(["ALL"]);
       } else {
@@ -254,8 +318,11 @@ const MultiSearchSelect = React.memo(
     };
 
     useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (containerRef.current && !containerRef.current.contains(e.target)) {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (
+          containerRef.current &&
+          !containerRef.current.contains(e.target as Node)
+        ) {
           setIsOpen(false);
         }
       };
@@ -266,26 +333,34 @@ const MultiSearchSelect = React.memo(
 
     return (
       <div className="space-y-1 relative" ref={containerRef}>
-        <label className="text-[10px] font-black text-slate-300 uppercase ml-1 flex items-center gap-1">
+        <label className="text-[10px] font-black text-slate-600 uppercase ml-1 flex items-center gap-1">
           <Filter size={10} /> {label}
         </label>
         <div
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full bg-slate-950/50 border ${
-            isOpen ? "border-red-500" : "border-slate-700"
+          className={`w-full bg-white border ${
+            isOpen
+              ? "border-indigo-600 ring-2 ring-indigo-100"
+              : "border-slate-300"
           } rounded-xl text-sm p-3 flex justify-between items-center cursor-pointer transition-all min-h-[48px]`}
         >
           <div className="flex flex-wrap gap-1 items-center max-w-[90%] overflow-hidden">
             {selectedValues.includes("ALL") ? (
-              <span className="text-white font-bold">ทั้งหมด</span>
+              <span className="text-slate-800 font-bold">ทั้งหมด</span>
             ) : (
               selectedValues.map((v) => {
-                const optFound = options.find((o) => (o.id || o) === v);
-                const labelText = optFound?.label || optFound?.name || v;
+                const optFound = options.find((o) => {
+                  if (typeof o === "string") return o === v;
+                  return o.id === v;
+                });
+                const labelText =
+                  typeof optFound === "string"
+                    ? optFound
+                    : optFound?.label || v;
                 return (
                   <span
                     key={v}
-                    className="bg-indigo-600 text-[10px] text-white px-2 py-0.5 rounded font-bold border border-indigo-400/30 flex items-center gap-1 whitespace-nowrap"
+                    className="bg-indigo-100 text-[10px] text-indigo-800 px-2 py-0.5 rounded font-bold border border-indigo-200 flex items-center gap-1 whitespace-nowrap"
                   >
                     {labelText}
                     <X
@@ -294,7 +369,7 @@ const MultiSearchSelect = React.memo(
                         e.stopPropagation();
                         toggleValue(v);
                       }}
-                      className="hover:text-red-200 cursor-pointer"
+                      className="hover:text-red-600 cursor-pointer"
                     />
                   </span>
                 );
@@ -303,19 +378,19 @@ const MultiSearchSelect = React.memo(
           </div>
           <ChevronDown
             size={14}
-            className={`text-white transition-transform flex-shrink-0 ${
+            className={`text-slate-500 transition-transform flex-shrink-0 ${
               isOpen ? "rotate-180" : ""
             }`}
           />
         </div>
 
         {isOpen && (
-          <div className="absolute z-[100] mt-2 w-full bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-2 border-b border-slate-600 flex items-center gap-2 bg-slate-900/50">
-              <Search size={14} className="text-slate-300 ml-2" />
+          <div className="absolute z-[100] mt-2 w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50">
+              <Search size={14} className="text-slate-500 ml-2" />
               <input
                 autoFocus
-                className="bg-transparent border-none focus:ring-0 text-sm w-full p-1 text-white placeholder-slate-400 outline-none"
+                className="bg-transparent border-none focus:ring-0 text-sm w-full p-1 text-slate-800 placeholder-slate-400 outline-none"
                 placeholder={placeholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -323,29 +398,29 @@ const MultiSearchSelect = React.memo(
             </div>
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
               <div
-                className={`p-3 text-sm cursor-pointer flex justify-between items-center hover:bg-slate-700 ${
+                className={`p-3 text-sm cursor-pointer flex justify-between items-center hover:bg-slate-50 ${
                   selectedValues.includes("ALL")
-                    ? "text-red-400 font-black bg-red-500/10"
-                    : "text-white font-medium"
+                    ? "text-indigo-600 font-black bg-indigo-50"
+                    : "text-slate-700 font-medium"
                 }`}
                 onClick={() => toggleValue("ALL")}
               >
                 <span>ทั้งหมด ({label})</span>
                 {selectedValues.includes("ALL") && (
-                  <Check size={14} className="text-red-400" />
+                  <Check size={14} className="text-indigo-600" />
                 )}
               </div>
               {filteredOptions.map((opt, idx) => {
-                const val = opt.value || opt.id || opt;
-                const lbl = opt.label || opt.name || opt;
+                const val = typeof opt === "string" ? opt : opt.id;
+                const lbl = typeof opt === "string" ? opt : opt.label;
                 const isSelected = selectedValues.includes(val);
                 return (
                   <div
                     key={idx}
-                    className={`p-3 text-sm cursor-pointer flex justify-between items-center hover:bg-slate-700 border-t border-slate-700/50 ${
+                    className={`p-3 text-sm cursor-pointer flex justify-between items-center hover:bg-slate-50 border-t border-slate-100 ${
                       isSelected
-                        ? "text-indigo-300 font-bold bg-indigo-500/10"
-                        : "text-white"
+                        ? "text-indigo-600 font-bold bg-indigo-50"
+                        : "text-slate-700"
                     }`}
                     onClick={() => toggleValue(val)}
                   >
@@ -368,7 +443,7 @@ const MultiSearchSelect = React.memo(
 // 3. MAIN APPLICATION
 // ==========================================
 export default function App() {
-  const DATA_SOURCES = useMemo(
+  const DATA_SOURCES = useMemo<DataSource[]>(
     () => [
       {
         id: "E1A",
@@ -389,13 +464,21 @@ export default function App() {
     []
   );
 
-  const [selectedSource, setSelectedSource] = useState(DATA_SOURCES[0]);
+  const [selectedSource, setSelectedSource] = useState<DataSource>(
+    DATA_SOURCES[0]
+  );
   const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
 
-  const [rawData, setRawData] = useState([]);
-  const [months, setMonths] = useState([]);
+  const [rawData, setRawData] = useState<DataItem[]>([]);
+  const [months, setMonths] = useState<string[]>([]);
   const [currentMonthIdx, setCurrentMonthIdx] = useState(0);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    area: string[];
+    team: string[];
+    branch: string[];
+    productType: string[];
+    system: string[];
+  }>({
     area: ["ALL"],
     team: ["ALL"],
     branch: ["ALL"],
@@ -403,26 +486,31 @@ export default function App() {
     system: ["ALL"],
   });
 
-  const [selectedSortMonths, setSelectedSortMonths] = useState([]);
-  const [sortConfig, setSortConfig] = useState({
+  const [selectedSortMonths, setSelectedSortMonths] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  }>({
     key: "rank",
     direction: "asc",
   });
 
   const [isLoading, setIsLoading] = useState(true);
-  const [errorObj, setErrorObj] = useState(null);
+  const [errorObj, setErrorObj] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sheetTitle, setSheetTitle] = useState("");
   const ITEMS_PER_PAGE = 25;
 
-  const [selectedCallDetails, setSelectedCallDetails] = useState(null);
-  const [modalSortKey, setModalSortKey] = useState("date");
-  const [modalSortDirection, setModalSortDirection] = useState("desc");
+  const [selectedCallDetails, setSelectedCallDetails] =
+    useState<CallDetails | null>(null);
+  const [modalSortKey, setModalSortKey] = useState<"date" | "age">("date");
+  const [modalSortDirection, setModalSortDirection] = useState<"asc" | "desc">(
+    "desc"
+  );
 
-  // State เก็บค่า Filter ภายใน Modal เพื่อใช้กรองตามที่ผู้ใช้คลิก
-  const [modalActiveFilter, setModalActiveFilter] = useState({
-    type: null, // 'productType' | 'system' | 'problemType'
-    value: null, // ค่าที่คลิกเพื่อทำการกรอง
+  const [modalActiveFilter, setModalActiveFilter] = useState<ModalFilter>({
+    type: null,
+    value: null,
   });
 
   useEffect(() => {
@@ -486,10 +574,13 @@ export default function App() {
       const headers = rows[0].map((h) =>
         h.replace(/[\u200B-\u200D\uFEFF"]/g, "").trim()
       );
-      const formatted = [];
-      const mSet = new Set();
+      const formatted: DataItem[] = [];
+      const mSet = new Set<string>();
 
-      const getColValue = (rowArr, possibleHeaders) => {
+      const getColValue = (
+        rowArr: string[],
+        possibleHeaders: string[]
+      ): string => {
         let idx = headers.findIndex((h) =>
           possibleHeaders.some((ph) => h.toLowerCase() === ph.toLowerCase())
         );
@@ -507,7 +598,6 @@ export default function App() {
         return idx !== -1 ? rowArr[idx]?.trim() || "" : "";
       };
 
-      // ใช้ forEach เลี่ยงปัญหา Infinite Loop Protection ของ Sandbox
       rows.slice(1).forEach((rowDataArray) => {
         if (!rowDataArray || rowDataArray.length < 3) return;
 
@@ -526,7 +616,7 @@ export default function App() {
           let mStr = "";
           let yStr = "";
 
-          const mMap = {
+          const mMap: Record<string, string> = {
             jan: "01",
             feb: "02",
             mar: "03",
@@ -628,6 +718,11 @@ export default function App() {
           ]),
           area: getColValue(rowDataArray, ["Area", "เขต"]),
           team: getColValue(rowDataArray, ["Team", "ทีม"]),
+          equipment: getColValue(rowDataArray, [
+            "Equipment",
+            "อุปกรณ์",
+            "ชื่ออุปกรณ์",
+          ]),
           product_type: getColValue(rowDataArray, [
             "Product Type",
             "Product",
@@ -654,6 +749,11 @@ export default function App() {
             "Age",
             "อายุ",
           ]),
+          repeat_call: getColValue(rowDataArray, [
+            "Call ซ่อมซ้ำ",
+            "ซ่อมซ้ำ",
+            "Repeat Call",
+          ]),
           month: monthKey,
         });
       });
@@ -662,9 +762,9 @@ export default function App() {
       setMonths(sortedMonths);
       setCurrentMonthIdx(sortedMonths.length > 0 ? sortedMonths.length - 1 : 0);
       setRawData(formatted);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorObj(err.message);
+      setErrorObj(err.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
     } finally {
       setIsLoading(false);
     }
@@ -704,12 +804,14 @@ export default function App() {
       "Branch Name",
       "Area",
       "Team",
+      "Equipment",
       "Product Type",
       "System",
       "Problem Type",
       "Damaged Parts",
       "Cause",
       "Equipment Age",
+      "Repeat Call",
       "Month",
     ];
     const csvRows = filteredData.map((d) =>
@@ -720,12 +822,14 @@ export default function App() {
         `"${d.branch_name}"`,
         `"${d.area}"`,
         `"${d.team}"`,
+        `"${d.equipment?.replace(/"/g, '""') || ""}"`,
         `"${d.product_type}"`,
         `"${d.system}"`,
         `"${d.problem_type}"`,
         `"${d.damaged_parts?.replace(/"/g, '""')}"`,
         `"${d.cause?.replace(/"/g, '""')}"`,
         `"${d.equipment_age}"`,
+        `"${d.repeat_call}"`,
         `"${d.month}"`,
       ].join(",")
     );
@@ -745,11 +849,12 @@ export default function App() {
   };
 
   const options = useMemo(() => {
-    const areas = new Set(),
-      teams = new Set(),
-      branches = new Map(),
-      productTypes = new Set(),
-      systems = new Set();
+    const areas = new Set<string>(),
+      teams = new Set<string>(),
+      branches = new Map<string, string>(),
+      productTypes = new Set<string>(),
+      systems = new Set<string>();
+
     rawData.forEach((d) => {
       if (d.area) areas.add(d.area);
       if (d.team) teams.add(d.team);
@@ -778,7 +883,18 @@ export default function App() {
   const viewData = useMemo(() => {
     if (!rawData.length || !months.length)
       return { table: [], charts: { prod: [], sys: [] } };
-    const bStats = new Map();
+
+    interface bStatsType {
+      id: string;
+      name: string;
+      area: string;
+      team: string;
+      monthlyCounts: Record<string, number>;
+      monthlyData: Record<string, DataItem[]>;
+      allCalls: DataItem[];
+      max_age: number;
+    }
+    const bStats = new Map<string, bStatsType>();
 
     const filteredForCalc = rawData.filter(
       (d) =>
@@ -799,12 +915,17 @@ export default function App() {
           monthlyCounts: {},
           monthlyData: {},
           allCalls: [],
+          max_age: 0,
         });
       }
-      const branchObj = bStats.get(d.branch_id);
+      const branchObj = bStats.get(d.branch_id)!;
       branchObj.monthlyCounts[d.month] =
         (branchObj.monthlyCounts[d.month] || 0) + 1;
       branchObj.allCalls.push(d);
+
+      const ageNum = parseFloat(d.equipment_age) || 0;
+      if (ageNum > branchObj.max_age) branchObj.max_age = ageNum;
+
       if (!branchObj.monthlyData[d.month]) branchObj.monthlyData[d.month] = [];
       branchObj.monthlyData[d.month].push(d);
       if (!branchObj.name && d.branch_name) branchObj.name = d.branch_name;
@@ -814,7 +935,7 @@ export default function App() {
     const prevMonthIdx = currentMonthIdx > 0 ? currentMonthIdx - 1 : -1;
     const prevMonthKey = prevMonthIdx !== -1 ? months[prevMonthIdx] : null;
 
-    const monthlyRanksMap = {};
+    const monthlyRanksMap: Record<string, Record<string, number>> = {};
     months.forEach((m) => {
       const scores = Array.from(bStats.values()).map((b) => ({
         id: b.id,
@@ -827,7 +948,7 @@ export default function App() {
         .reduce((acc, cur, idx) => {
           acc[cur.id] = cur.count > 0 ? idx + 1 : 0;
           return acc;
-        }, {});
+        }, {} as Record<string, number>);
     });
 
     const cumulativeScores = Array.from(bStats.values()).map((b) => {
@@ -837,12 +958,12 @@ export default function App() {
     cumulativeScores.sort((a, b) =>
       b.total !== a.total ? b.total - a.total : a.id.localeCompare(b.id)
     );
-    const cumulativeRanks = {};
+    const cumulativeRanks: Record<string, number> = {};
     cumulativeScores.forEach((item, index) => {
       cumulativeRanks[item.id] = item.total > 0 ? index + 1 : 0;
     });
 
-    const table = Array.from(bStats.values())
+    const table: BranchTableItem[] = Array.from(bStats.values())
       .filter(
         (b) => filters.branch.includes("ALL") || filters.branch.includes(b.id)
       )
@@ -858,6 +979,7 @@ export default function App() {
           team: b.team,
           rank: cumulativeRanks[b.id] || 0,
           movement: cRank > 0 && pRank > 0 ? pRank - cRank : 0,
+          max_age: b.max_age,
           total_calls: b.allCalls.length,
           history: months.map((m) => ({
             month: m,
@@ -869,8 +991,8 @@ export default function App() {
         };
       });
 
-    const prodCount = {};
-    const sysCount = {};
+    const prodCount: Record<string, number> = {};
+    const sysCount: Record<string, number> = {};
     let totalProd = 0;
     let totalSys = 0;
 
@@ -881,12 +1003,21 @@ export default function App() {
       totalSys++;
     });
 
-    const chartData = (counts, total) =>
+    interface ChartItem {
+      name: string;
+      value: number;
+      percentage: string;
+    }
+
+    const chartData = (
+      counts: Record<string, number>,
+      total: number
+    ): ChartItem[] =>
       Object.entries(counts)
         .map(([name, value]) => ({
           name: name || "N/A",
           value,
-          percentage: total > 0 ? ((value / total) * 100).toFixed(1) : 0,
+          percentage: total > 0 ? ((value / total) * 100).toFixed(1) : "0",
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 5);
@@ -900,7 +1031,7 @@ export default function App() {
     };
   }, [rawData, months, currentMonthIdx, filters]);
 
-  const handleToggleSortMonth = useCallback((monthKey) => {
+  const handleToggleSortMonth = useCallback((monthKey: string) => {
     setSelectedSortMonths((prev) => {
       if (prev.includes(monthKey)) {
         const next = prev.filter((m) => m !== monthKey);
@@ -920,22 +1051,27 @@ export default function App() {
   const sortedTableData = useMemo(() => {
     let sortable = [...viewData.table];
     if (sortConfig.key) {
-      sortable.sort((a, b) => {
-        let valA, valB;
+      sortable.sort((a: any, b: any) => {
+        let valA: any, valB: any;
         if (sortConfig.key === "multi_month_sort") {
           valA = selectedSortMonths.reduce(
             (sum, m) =>
-              sum + (a.history.find((h) => h.month === m)?.count || 0),
+              sum + (a.history.find((h: any) => h.month === m)?.count || 0),
             0
           );
           valB = selectedSortMonths.reduce(
             (sum, m) =>
-              sum + (b.history.find((h) => h.month === m)?.count || 0),
+              sum + (b.history.find((h: any) => h.month === m)?.count || 0),
             0
           );
+        } else if (sortConfig.key === "max_age") {
+          valA = a.max_age;
+          valB = b.max_age;
         } else if (months.includes(sortConfig.key)) {
-          valA = a.history.find((h) => h.month === sortConfig.key)?.count || 0;
-          valB = b.history.find((h) => h.month === sortConfig.key)?.count || 0;
+          valA =
+            a.history.find((h: any) => h.month === sortConfig.key)?.count || 0;
+          valB =
+            b.history.find((h: any) => h.month === sortConfig.key)?.count || 0;
         } else {
           valA = a[sortConfig.key];
           valB = b[sortConfig.key];
@@ -963,7 +1099,7 @@ export default function App() {
     // ✅ กรองตามตัวเลือกที่คลิกจากการ์ดสรุปผล
     if (modalActiveFilter.type && modalActiveFilter.value) {
       const { type, value } = modalActiveFilter;
-      calls = calls.filter((call) => {
+      calls = calls.filter((call: any) => {
         if (type === "productType") return call.product_type === value;
         if (type === "system") return call.system === value;
         if (type === "problemType") return call.problem_type === value;
@@ -972,7 +1108,8 @@ export default function App() {
     }
 
     calls.sort((a, b) => {
-      let valA, valB;
+      let valA = 0,
+        valB = 0;
       if (modalSortKey === "date") {
         valA = parseDateToTimestamp(a.date);
         valB = parseDateToTimestamp(b.date);
@@ -993,7 +1130,7 @@ export default function App() {
     modalActiveFilter,
   ]);
 
-  const handleModalSort = (key) => {
+  const handleModalSort = (key: "date" | "age") => {
     if (modalSortKey === key) {
       setModalSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
@@ -1003,21 +1140,24 @@ export default function App() {
   };
 
   // จัดการการคลิกที่ไอเทมในสรุปการ์ดย่อยของ Pop-up Modal เพื่อ Toggle กรองข้อมูล
-  const handleToggleModalFilter = useCallback((type, value) => {
-    setModalActiveFilter((prev) => {
-      if (prev.type === type && prev.value === value) {
-        return { type: null, value: null }; // กดซ้ำเพื่อปลดฟิลเตอร์
-      }
-      return { type, value }; // กดเพื่อเลือกกรอง
-    });
-  }, []);
+  const handleToggleModalFilter = useCallback(
+    (type: "productType" | "system" | "problemType", value: string) => {
+      setModalActiveFilter((prev) => {
+        if (prev.type === type && prev.value === value) {
+          return { type: null, value: null }; // กดซ้ำเพื่อปลดฟิลเตอร์
+        }
+        return { type, value }; // กดเพื่อเลือกกรอง
+      });
+    },
+    []
+  );
 
   // ฟังก์ชันรีเซ็ตฟิลเตอร์ภายใน Modal
   const handleClearModalFilter = useCallback(() => {
     setModalActiveFilter({ type: null, value: null });
   }, []);
 
-  const renderCustomBarLabel = (props, dataArray) => {
+  const renderCustomBarLabel = (props: any, dataArray: any[]) => {
     const { x, y, width, height, value, index } = props;
     const item = dataArray[index];
     if (!item) return null;
@@ -1026,7 +1166,7 @@ export default function App() {
       <text
         x={x + (isSmall ? width + 5 : width - 8)}
         y={y + height / 2 + 1}
-        fill={isSmall ? "#cbd5e1" : "#ffffff"}
+        fill={isSmall ? "#475569" : "#ffffff"}
         textAnchor={isSmall ? "start" : "end"}
         dominantBaseline="central"
         fontSize={10}
@@ -1037,25 +1177,30 @@ export default function App() {
     );
   };
 
-  const getSortIcon = (key) => {
+  const getSortIcon = (key: string) => {
     if (key === "multi_month_sort") {
       return sortConfig.direction === "asc" ? (
-        <ArrowUp size={12} className="text-red-400" />
+        <ArrowUp size={12} className="text-red-500" />
       ) : (
-        <ArrowDown size={12} className="text-red-400" />
+        <ArrowDown size={12} className="text-red-500" />
       );
     }
     if (sortConfig.key !== key)
       return <ArrowUpDown size={12} className="opacity-30" />;
     return sortConfig.direction === "asc" ? (
-      <ArrowUp size={12} className="text-red-400" />
+      <ArrowUp size={12} className="text-red-500" />
     ) : (
-      <ArrowDown size={12} className="text-red-400" />
+      <ArrowDown size={12} className="text-red-500" />
     );
   };
 
-  const getModalSummary = (calls) => {
-    const stats = { prod: {}, sys: {}, prob: {}, age: [] };
+  const getModalSummary = (calls: DataItem[]) => {
+    const stats = {
+      prod: {} as Record<string, number>,
+      sys: {} as Record<string, number>,
+      prob: {} as Record<string, number>,
+      age: [] as number[],
+    };
     const total = calls.length;
     for (let i = 0; i < calls.length; i++) {
       const c = calls[i];
@@ -1069,13 +1214,15 @@ export default function App() {
     }
 
     // คำนวณเปอร์เซ็นต์และแนบค่ากลับไปพร้อมกับ count
-    const getSorted = (obj) =>
+    const getSorted = (
+      obj: Record<string, number>
+    ): [string, number, string][] =>
       Object.entries(obj)
         .sort((a, b) => b[1] - a[1])
         .map(([name, val]) => [
           name,
           val,
-          total > 0 ? ((val / total) * 100).toFixed(1) : 0,
+          total > 0 ? ((val / total) * 100).toFixed(1) : "0",
         ]);
 
     const maxAge = stats.age.length ? Math.max(...stats.age).toFixed(0) : "-";
@@ -1089,34 +1236,34 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
 
-      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-10 border-b border-slate-800/60 pb-10">
+      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-10 border-b border-slate-200 pb-10">
         <div className="flex flex-col gap-4">
           {/* --- Dropdown เลือกทีม --- */}
           <div className="relative z-50 self-start">
             <button
               onClick={() => setIsSourceDropdownOpen(!isSourceDropdownOpen)}
-              className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 transition-all shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              className="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-800 px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-200 transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             >
-              <Database size={16} className="text-indigo-400" />
+              <Database size={16} className="text-indigo-600" />
               <span>
                 เลือกข้อมูลที่แสดง:{" "}
-                <span className="text-indigo-300 ml-1">
+                <span className="text-indigo-600 ml-1">
                   {selectedSource.name}
                 </span>
               </span>
               <ChevronDown
                 size={14}
-                className={`text-slate-400 ml-2 transition-transform duration-200 ${
+                className={`text-slate-500 ml-2 transition-transform duration-200 ${
                   isSourceDropdownOpen ? "rotate-180" : ""
                 }`}
               />
@@ -1128,8 +1275,8 @@ export default function App() {
                   className="fixed inset-0 z-40"
                   onClick={() => setIsSourceDropdownOpen(false)}
                 ></div>
-                <div className="absolute top-full left-0 mt-2 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="p-3 border-b border-slate-700 bg-slate-900/80 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                     <Check size={12} /> เลือกทีมที่ต้องการดู
                   </div>
                   {DATA_SOURCES.map((src) => (
@@ -1139,14 +1286,14 @@ export default function App() {
                         setSelectedSource(src);
                         setIsSourceDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-4 py-3 text-sm font-bold hover:bg-slate-700 transition-colors flex items-center gap-2 ${
+                      className={`w-full text-left px-4 py-3 text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2 ${
                         selectedSource.id === src.id
-                          ? "bg-indigo-500/10 text-indigo-300 border-l-4 border-indigo-500"
-                          : "text-slate-300 border-l-4 border-transparent"
+                          ? "bg-indigo-50 text-indigo-600 border-l-4 border-indigo-600"
+                          : "text-slate-700 border-l-4 border-transparent"
                       }`}
                     >
                       {selectedSource.id === src.id && (
-                        <Check size={14} className="text-indigo-400" />
+                        <Check size={14} className="text-indigo-600" />
                       )}
                       <span
                         className={selectedSource.id === src.id ? "" : "ml-5"}
@@ -1160,7 +1307,7 @@ export default function App() {
             )}
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-black text-white flex items-center gap-4 italic tracking-tighter">
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 flex items-center gap-4 italic tracking-tighter">
             <Trophy className="text-yellow-500" size={48} />
             <span>
               TOP {selectedSource.name.toUpperCase().replace(" ALL CAFE", "")}{" "}
@@ -1170,16 +1317,16 @@ export default function App() {
               </span>
             </span>
           </h1>
-          <div className="flex items-center gap-3 mt-2 text-white font-bold text-xs tracking-widest uppercase">
-            <span className="bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          <div className="flex items-center gap-3 mt-2 text-slate-800 font-bold text-xs tracking-widest uppercase">
+            <span className="bg-slate-200 px-3 py-1 rounded-full border border-slate-300">
               PERFORMANCE
             </span>
             {isLoading ? (
-              <span className="flex items-center gap-2 animate-pulse text-white">
+              <span className="flex items-center gap-2 animate-pulse text-indigo-600">
                 <Loader2 size={12} className="animate-spin" /> SYNCING...
               </span>
             ) : (
-              <span className="text-red-400 font-black">
+              <span className="text-red-600 font-black">
                 {rawData.length.toLocaleString()} TOTAL CALLS
               </span>
             )}
@@ -1187,12 +1334,12 @@ export default function App() {
         </div>
         <div className="w-full xl:w-auto flex flex-col items-end gap-3">
           {!isLoading && !errorObj && sheetTitle && (
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 bg-slate-800/80 px-4 py-2 rounded-full border border-slate-600 shadow-md animate-in fade-in slide-in-from-right-4 duration-500">
-              <FileSpreadsheet size={14} className="text-green-400" />
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 px-4 py-2 rounded-full border border-slate-200 shadow-md animate-in fade-in slide-in-from-right-4 duration-500">
+              <FileSpreadsheet size={14} className="text-green-600" />
               <span className="tracking-wide">
-                ไฟล์ข้อมูล: <span className="text-white">{sheetTitle}</span>
+                ไฟล์ข้อมูล: <span className="text-slate-900">{sheetTitle}</span>
               </span>
-              <Check size={14} className="text-green-400 ml-1" />
+              <Check size={14} className="text-green-600 ml-1" />
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-4 w-full justify-end">
@@ -1204,7 +1351,7 @@ export default function App() {
             </button>
             <button
               onClick={fetchCloudData}
-              className="bg-white hover:bg-slate-200 text-slate-950 px-8 py-4 rounded-2xl font-black flex justify-center items-center gap-3 transition-all shadow-xl active:scale-95"
+              className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-black flex justify-center items-center gap-3 transition-all shadow-xl active:scale-95"
             >
               <RefreshCw
                 size={20}
@@ -1218,13 +1365,13 @@ export default function App() {
 
       {/* แจ้งเตือนกรณีเกิดข้อผิดพลาดในการโหลด */}
       {errorObj && (
-        <div className="bg-red-950 border border-red-500/50 p-6 rounded-[2rem] flex flex-col items-center justify-center mb-8 gap-4 shadow-xl">
-          <FileWarning size={48} className="text-red-400" />
+        <div className="bg-red-50 border border-red-200 p-6 rounded-[2rem] flex flex-col items-center justify-center mb-8 gap-4 shadow-xl">
+          <FileWarning size={48} className="text-red-500" />
           <div className="text-center">
-            <h2 className="text-xl font-black text-white">
+            <h2 className="text-xl font-black text-slate-900">
               ไม่สามารถโหลดข้อมูล {selectedSource.name} ได้ชั่วคราว
             </h2>
-            <p className="text-sm text-red-200 mt-2 max-w-lg mx-auto">
+            <p className="text-sm text-red-600 mt-2 max-w-lg mx-auto">
               {errorObj}
             </p>
           </div>
@@ -1243,8 +1390,8 @@ export default function App() {
         }`}
       >
         <div className="col-span-12 lg:col-span-3">
-          <div className="bg-slate-900/60 border border-slate-700 p-6 rounded-[2.5rem] backdrop-blur-xl sticky top-8 space-y-6">
-            <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+          <div className="bg-white border border-slate-200 p-6 rounded-[2.5rem] shadow-sm sticky top-8 space-y-6">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Filter size={14} className="text-red-500" /> Filter Engine
             </h3>
             <MultiSearchSelect
@@ -1274,7 +1421,7 @@ export default function App() {
               selectedValues={filters.branch}
               onChange={(v) => setFilters((p) => ({ ...p, branch: v }))}
             />
-            <div className="pt-4 border-t border-slate-700/50">
+            <div className="pt-4 border-t border-slate-200">
               <MultiSearchSelect
                 label="Product (ประเภทงาน)"
                 options={options.productTypes}
@@ -1300,7 +1447,7 @@ export default function App() {
                 setSelectedSortMonths([]);
                 setSortConfig({ key: "rank", direction: "asc" });
               }}
-              className="w-full py-4 text-[10px] font-black text-white hover:text-white transition-all border border-slate-700 rounded-2xl hover:bg-red-600 hover:border-red-500 uppercase tracking-widest bg-slate-800"
+              className="w-full py-4 text-[10px] font-black text-slate-700 hover:text-white transition-all border border-slate-300 rounded-2xl hover:bg-red-600 hover:border-red-500 uppercase tracking-widest bg-slate-100"
             >
               Reset Filters
             </button>
@@ -1309,12 +1456,12 @@ export default function App() {
 
         <div className="col-span-12 lg:col-span-9 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-slate-900/60 border border-slate-700 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-lg">
+            <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
-                <h3 className="text-[10px] font-black text-blue-300 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
                   <Box size={16} /> Top Product (งานรวมทุกเดือน)
                 </h3>
-                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-black">
+                <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 font-black">
                   ALL DATA
                 </span>
               </div>
@@ -1329,23 +1476,23 @@ export default function App() {
                     dataKey="name"
                     type="category"
                     width={140}
-                    tick={{ fill: "#f1f5f9", fontSize: 10, fontWeight: "bold" }}
+                    tick={{ fill: "#475569", fontSize: 10, fontWeight: "bold" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
-                    cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
                     contentStyle={{
-                      backgroundColor: "#0f172a",
-                      border: "1px solid #334155",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e2e8f0",
                       borderRadius: "12px",
                       fontSize: "10px",
-                      color: "#fff",
+                      color: "#0f172a",
                     }}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                     {viewData.charts.prod.map((e, i) => (
-                      <Cell key={i} fill={i === 0 ? "#3b82f6" : "#475569"} />
+                      <Cell key={i} fill={i === 0 ? "#3b82f6" : "#cbd5e1"} />
                     ))}
                     <LabelList
                       dataKey="value"
@@ -1357,12 +1504,12 @@ export default function App() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="bg-slate-900/60 border border-slate-700 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-lg">
+            <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
-                <h3 className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
                   <Settings size={16} /> Top Systems (ระบบที่เสียรวม)
                 </h3>
-                <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded border border-red-500/30 font-black">
+                <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-200 font-black">
                   ALL DATA
                 </span>
               </div>
@@ -1377,23 +1524,23 @@ export default function App() {
                     dataKey="name"
                     type="category"
                     width={140}
-                    tick={{ fill: "#f1f5f9", fontSize: 10, fontWeight: "bold" }}
+                    tick={{ fill: "#475569", fontSize: 10, fontWeight: "bold" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
-                    cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
                     contentStyle={{
-                      backgroundColor: "#0f172a",
-                      border: "1px solid #334155",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e2e8f0",
                       borderRadius: "12px",
                       fontSize: "10px",
-                      color: "#fff",
+                      color: "#0f172a",
                     }}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                     {viewData.charts.sys.map((e, i) => (
-                      <Cell key={i} fill={i === 0 ? "#ef4444" : "#475569"} />
+                      <Cell key={i} fill={i === 0 ? "#ef4444" : "#cbd5e1"} />
                     ))}
                     <LabelList
                       dataKey="value"
@@ -1407,9 +1554,9 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-900/40 to-slate-900/80 border border-indigo-500/30 p-6 rounded-[2rem] flex flex-col justify-center shadow-lg">
+          <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-6 rounded-[2rem] flex flex-col justify-center shadow-sm">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-[10px] font-black uppercase text-indigo-300 flex items-center gap-2">
+              <h3 className="text-[10px] font-black uppercase text-indigo-800 flex items-center gap-2">
                 <Calendar size={14} /> TABLE VIEW PERIOD
                 (เลือกเดือนเพื่อดูอันดับในตาราง)
               </h3>
@@ -1423,32 +1570,32 @@ export default function App() {
               max={months.length > 0 ? months.length - 1 : 0}
               value={currentMonthIdx}
               onChange={(e) => setCurrentMonthIdx(parseInt(e.target.value))}
-              className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 border border-slate-700"
+              className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 border border-slate-300"
             />
             <div className="flex justify-between mt-3 px-1">
-              <span className="text-[9px] font-black text-slate-500 uppercase">
+              <span className="text-[9px] font-black text-slate-600 uppercase">
                 {formatMonthLabel(months[0])}
               </span>
-              <span className="text-[9px] font-black text-slate-500 uppercase">
+              <span className="text-[9px] font-black text-slate-600 uppercase">
                 {formatMonthLabel(months[months.length - 1])}
               </span>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 rounded-[2.5rem] overflow-hidden border border-slate-700 shadow-2xl backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
             {selectedSortMonths.length > 0 && (
-              <div className="bg-indigo-950/80 border-b border-indigo-500/30 p-4 px-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 animate-in fade-in duration-300">
+              <div className="bg-indigo-50 border-b border-indigo-100 p-4 px-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 animate-in fade-in duration-300">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-300 animate-pulse">
+                  <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700 animate-pulse">
                     <Activity size={16} />
                   </div>
                   <div>
-                    <div className="text-xs font-black text-white">
+                    <div className="text-xs font-black text-indigo-950">
                       กำลังเรียงลำดับแบบหลายเดือนพร้อมกัน (Multi-Month Sorting)
                     </div>
-                    <div className="text-[10px] text-indigo-200 mt-1">
+                    <div className="text-[10px] text-indigo-700 mt-1">
                       คำนวณจากเคสซ่อมรวมของเดือน:{" "}
-                      <span className="text-red-400 font-bold">
+                      <span className="text-red-600 font-bold">
                         {selectedSortMonths
                           .map((m) => formatMonthLabel(m))
                           .join(", ")}
@@ -1471,9 +1618,9 @@ export default function App() {
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
-                  <tr className="bg-slate-950/80 border-b border-slate-700 uppercase text-[10px] font-black text-white tracking-widest">
+                  <tr className="bg-slate-100 border-b border-slate-200 uppercase text-[10px] font-black text-slate-700 tracking-widest">
                     <th
-                      className="p-6 text-center w-24 cursor-pointer hover:bg-slate-800 transition-colors"
+                      className="p-6 text-center w-24 cursor-pointer hover:bg-slate-200 transition-colors"
                       onClick={() => {
                         setSelectedSortMonths([]);
                         setSortConfig({
@@ -1491,7 +1638,7 @@ export default function App() {
                       </div>
                     </th>
                     <th
-                      className="p-6 text-center w-28 cursor-pointer hover:bg-slate-800 transition-colors"
+                      className="p-6 text-center w-28 cursor-pointer hover:bg-slate-200 transition-colors"
                       onClick={() => {
                         setSelectedSortMonths([]);
                         setSortConfig({
@@ -1509,7 +1656,25 @@ export default function App() {
                       </div>
                     </th>
                     <th
-                      className="p-6 cursor-pointer hover:bg-slate-800 transition-colors"
+                      className="p-6 text-center w-32 cursor-pointer hover:bg-slate-200 transition-colors"
+                      onClick={() => {
+                        setSelectedSortMonths([]);
+                        setSortConfig({
+                          key: "max_age",
+                          direction:
+                            sortConfig.key === "max_age" &&
+                            sortConfig.direction === "desc"
+                              ? "asc"
+                              : "desc",
+                        });
+                      }}
+                    >
+                      <div className="flex items-center justify-center gap-2 text-indigo-700">
+                        อายุสูงสุด {getSortIcon("max_age")}
+                      </div>
+                    </th>
+                    <th
+                      className="p-6 cursor-pointer hover:bg-slate-200 transition-colors"
                       onClick={() => {
                         setSelectedSortMonths([]);
                         setSortConfig({
@@ -1533,17 +1698,17 @@ export default function App() {
                           key={m}
                           className={`p-3 text-center transition-all cursor-pointer relative group/th ${
                             isMonthInMultiSort
-                              ? "text-indigo-300 bg-indigo-500/20 border-x border-indigo-500/30"
+                              ? "text-indigo-800 bg-indigo-100 border-x border-indigo-200"
                               : m === months[currentMonthIdx]
-                              ? "text-red-400 bg-red-500/10"
-                              : "hover:bg-slate-800 text-white"
+                              ? "text-red-650 bg-red-50"
+                              : "hover:bg-slate-100 text-slate-700"
                           }`}
                           onClick={() => handleToggleSortMonth(m)}
                         >
                           <div className="flex flex-col items-center justify-center gap-1">
                             {formatMonthLabel(m).split(" ")[0]}
                             {isMonthInMultiSort ? (
-                              <div className="flex items-center justify-center bg-indigo-500 text-white rounded-full p-0.5 mt-0.5">
+                              <div className="flex items-center justify-center bg-indigo-600 text-white rounded-full p-0.5 mt-0.5">
                                 <Check size={8} />
                               </div>
                             ) : (
@@ -1551,7 +1716,7 @@ export default function App() {
                             )}
                           </div>
 
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 text-white">
                             {isMonthInMultiSort
                               ? "คลิกเพื่อยกเลิกการจัดเรียงเดือนนี้"
                               : "คลิกเพื่อเพิ่มในการจัดเรียงหลายเดือน"}
@@ -1560,7 +1725,7 @@ export default function App() {
                       );
                     })}
                     <th
-                      className="p-6 text-center text-indigo-300 w-32 bg-indigo-500/10 cursor-pointer hover:bg-indigo-500/20 transition-colors"
+                      className="p-6 text-center text-indigo-700 w-32 bg-indigo-50/50 cursor-pointer hover:bg-indigo-100/50 transition-colors"
                       onClick={() => {
                         setSelectedSortMonths([]);
                         setSortConfig({
@@ -1579,7 +1744,7 @@ export default function App() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700/50">
+                <tbody className="divide-y divide-slate-100">
                   {sortedTableData.length > 0 ? (
                     sortedTableData
                       .slice(
@@ -1598,17 +1763,17 @@ export default function App() {
                         return (
                           <tr
                             key={row.branch_id}
-                            className={`hover:bg-slate-800/60 transition-all group ${
+                            className={`hover:bg-slate-50 transition-all group ${
                               selectedSortMonths.length > 0
                                 ? "border-l-4 border-indigo-500"
                                 : ""
                             }`}
                           >
-                            <td className="p-6 text-center text-2xl font-black italic text-white">
+                            <td className="p-6 text-center text-2xl font-black italic text-slate-800">
                               {selectedSortMonths.length > 0 ? (
-                                <div className="text-xs font-bold text-indigo-400 bg-indigo-500/10 py-1.5 rounded-xl border border-indigo-500/20">
+                                <div className="text-xs font-bold text-indigo-700 bg-indigo-50 py-1.5 rounded-xl border border-indigo-100">
                                   <span>ซ่อมรวม</span>
-                                  <div className="text-lg font-black text-white mt-0.5">
+                                  <div className="text-lg font-black text-slate-900 mt-0.5">
                                     {sumMultiCalls}
                                   </div>
                                 </div>
@@ -1621,11 +1786,11 @@ export default function App() {
                             <td className="p-6 text-center">
                               <div className="flex justify-center">
                                 {row.movement > 0 ? (
-                                  <div className="text-red-400 bg-red-500/10 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
+                                  <div className="text-red-600 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
                                     <TrendingUp size={12} />+{row.movement}
                                   </div>
                                 ) : row.movement < 0 ? (
-                                  <div className="text-green-400 bg-green-500/10 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
+                                  <div className="text-green-600 bg-green-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
                                     <TrendingDown size={12} />
                                     {row.movement}
                                   </div>
@@ -1635,6 +1800,20 @@ export default function App() {
                                     className="opacity-50 text-slate-400"
                                   />
                                 )}
+                              </div>
+                            </td>
+                            <td className="p-6 text-center">
+                              <div
+                                className={`inline-block px-3 py-1.5 rounded-2xl border font-black italic text-sm ${
+                                  row.max_age > 7
+                                    ? "bg-red-50 text-red-600 border-red-200"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                                }`}
+                              >
+                                {row.max_age > 0 ? row.max_age : "-"}{" "}
+                                <small className="text-[10px] not-italic opacity-50">
+                                  ปี
+                                </small>
                               </div>
                             </td>
                             <td className="p-6">
@@ -1654,23 +1833,23 @@ export default function App() {
                                   setModalActiveFilter({
                                     type: null,
                                     value: null,
-                                  }); // รีเซ็ตฟิลเตอร์เมื่อเปิดบราวเซอร์ตัวใหม่
+                                  });
                                 }}
                                 className="cursor-pointer group/branch"
                               >
-                                <div className="font-black text-white text-base group-hover/branch:text-red-400 transition-colors flex items-center gap-2">
+                                <div className="font-black text-slate-800 text-base group-hover/branch:text-red-500 transition-colors flex items-center gap-2">
                                   {row.branch_name || row.branch_id}
                                   <ChevronRight
                                     size={16}
-                                    className="opacity-0 group-hover/branch:opacity-100 -translate-x-2 group-hover/branch:translate-x-0 transition-all text-red-400"
+                                    className="opacity-0 group-hover/branch:opacity-100 -translate-x-2 group-hover/branch:translate-x-0 transition-all text-red-500"
                                   />
                                 </div>
                               </div>
                               <div className="flex gap-2 mt-2">
-                                <span className="text-[9px] text-white font-bold uppercase bg-slate-800 px-2 py-0.5 rounded border border-slate-600">
+                                <span className="text-[9px] text-slate-700 font-bold uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                                   {row.branch_id}
                                 </span>
-                                <span className="text-[9px] text-indigo-300 font-bold uppercase bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">
+                                <span className="text-[9px] text-indigo-700 font-bold uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
                                   {row.area} | {row.team}
                                 </span>
                               </div>
@@ -1683,7 +1862,7 @@ export default function App() {
                                   key={i}
                                   className={`p-1 ${
                                     isMonthSelectedInMulti
-                                      ? "bg-indigo-500/5 border-x border-indigo-500/10"
+                                      ? "bg-indigo-50/50 border-x border-indigo-100"
                                       : ""
                                   }`}
                                 >
@@ -1704,7 +1883,7 @@ export default function App() {
                                         setModalActiveFilter({
                                           type: null,
                                           value: null,
-                                        }); // รีเซ็ตฟิลเตอร์เมื่อเปลี่ยนห้องซ่อมย่อย
+                                        });
                                       }
                                     }}
                                     className={`w-full h-14 flex flex-col items-center justify-center rounded-xl transition-all border-2 ${getRankColor(
@@ -1712,10 +1891,10 @@ export default function App() {
                                       h.count
                                     )} ${
                                       isMonthSelectedInMulti
-                                        ? "ring-2 ring-indigo-400 scale-105 shadow-md border-indigo-300"
+                                        ? "ring-2 ring-indigo-500 scale-105 shadow-md border-indigo-300"
                                         : h.month === months[currentMonthIdx]
-                                        ? "ring-2 ring-white/60 scale-105 shadow-lg"
-                                        : "opacity-70 group-hover:opacity-100 hover:scale-105"
+                                        ? "ring-2 ring-indigo-600 scale-105 shadow-lg"
+                                        : "opacity-75 group-hover:opacity-100 hover:scale-105"
                                     }`}
                                   >
                                     <div className="text-sm font-black text-white">
@@ -1728,11 +1907,11 @@ export default function App() {
                                 </td>
                               );
                             })}
-                            <td className="p-6 text-center bg-indigo-500/10">
-                              <div className="text-2xl font-black text-white">
+                            <td className="p-6 text-center bg-indigo-50/20">
+                              <div className="text-2xl font-black text-indigo-950">
                                 {row.total_calls}
                               </div>
-                              <div className="text-[8px] font-black text-indigo-300 uppercase mt-1">
+                              <div className="text-[8px] font-black text-indigo-700 uppercase mt-1">
                                 TOTAL CALLS
                               </div>
                             </td>
@@ -1742,13 +1921,13 @@ export default function App() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={months.length + 4}
+                        colSpan={months.length + 5}
                         className="p-20 text-center text-slate-500 font-bold"
                       >
                         {isLoading ? (
                           <div className="flex flex-col items-center gap-2">
                             <Loader2
-                              className="animate-spin text-indigo-500 mx-auto mb-4"
+                              className="animate-spin text-indigo-600 mx-auto mb-4"
                               size={32}
                             />
                             กำลังโหลดข้อมูล...
@@ -1762,7 +1941,7 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-            <div className="p-6 bg-slate-950/40 border-t border-slate-700 flex justify-between items-center">
+            <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
               <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 PAGE {currentPage} OF{" "}
                 {Math.ceil(sortedTableData.length / ITEMS_PER_PAGE) || 1}
@@ -1770,13 +1949,13 @@ export default function App() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 disabled:opacity-30 text-white"
+                  className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-30 text-slate-700"
                 >
                   <ChevronLeft size={16} />
                 </button>
                 <button
                   onClick={() => setCurrentPage((p) => p + 1)}
-                  className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 disabled:opacity-30 text-white"
+                  className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-30 text-slate-700"
                   disabled={
                     currentPage >=
                     Math.ceil(sortedTableData.length / ITEMS_PER_PAGE)
@@ -1794,11 +1973,11 @@ export default function App() {
       {selectedCallDetails && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-slate-950/95 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setSelectedCallDetails(null)}
           ></div>
-          <div className="bg-slate-900 border border-slate-600 w-full max-w-7xl max-h-[90vh] rounded-[3rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative z-10 flex flex-col animate-modal">
-            <div className="p-8 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+          <div className="bg-white border border-slate-200 w-full max-w-7xl max-h-[90vh] rounded-[3rem] shadow-[0_10px_50px_rgba(0,0,0,0.15)] overflow-hidden relative z-10 flex flex-col animate-modal">
+            <div className="p-8 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-6">
                 <div className="h-16 w-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-600/20 italic font-black text-2xl text-white">
                   CL
@@ -1810,24 +1989,24 @@ export default function App() {
                         ? "CUMULATIVE PERFORMANCE"
                         : "MONTHLY CALL DETAILS"}
                     </span>
-                    <span className="text-white text-[10px] font-black uppercase bg-red-500/20 px-3 py-1 rounded-full border border-red-500/40">
+                    <span className="text-red-700 text-[10px] font-black uppercase bg-red-100 px-3 py-1 rounded-full border border-red-200">
                       {selectedCallDetails.isTotal
                         ? "ทุกช่วงเวลา"
                         : formatMonthLabel(selectedCallDetails.month)}
                     </span>
                     {/* ป้ายแสดงตัวกรองที่เลือกใน Modal อยู่ขณะนี้ */}
                     {modalActiveFilter.type && (
-                      <span className="bg-indigo-500/30 border border-indigo-400/40 text-indigo-300 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
+                      <span className="bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
                         กรองตาม: {modalActiveFilter.value}
                         <X
                           size={12}
-                          className="cursor-pointer hover:text-white"
+                          className="cursor-pointer hover:text-indigo-900"
                           onClick={handleClearModalFilter}
                         />
                       </span>
                     )}
                   </div>
-                  <h2 className="text-3xl font-black text-white italic mt-2 tracking-tight">
+                  <h2 className="text-3xl font-black text-slate-800 italic mt-2 tracking-tight">
                     {selectedCallDetails.branchName}
                   </h2>
                 </div>
@@ -1837,17 +2016,17 @@ export default function App() {
                   setSelectedCallDetails(null);
                   handleClearModalFilter();
                 }}
-                className="h-12 w-12 bg-slate-700 hover:bg-red-600 text-white rounded-2xl transition-all flex items-center justify-center group"
+                className="h-12 w-12 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl transition-all flex items-center justify-center group"
               >
                 <X size={24} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-8 custom-scrollbar space-y-8">
+            <div className="flex-1 overflow-auto p-8 custom-scrollbar space-y-8 bg-slate-50">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* 1. ALL PRODUCT TYPES Card */}
-                <div className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl shadow-inner flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-blue-300 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-slate-800/0 py-1">
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
+                  <h4 className="text-[10px] font-black text-blue-600 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <Box size={14} /> ALL PRODUCT TYPES
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
@@ -1862,10 +2041,10 @@ export default function App() {
                             onClick={() =>
                               handleToggleModalFilter("productType", name)
                             }
-                            className={`flex justify-between items-center border-b border-slate-700/30 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-800 ${
+                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
                               isFiltered
-                                ? "bg-indigo-600/30 border-l-4 border-indigo-500 text-indigo-300 font-black"
-                                : "text-slate-300"
+                                ? "bg-indigo-50 border-l-4 border-indigo-500 text-indigo-700 font-black"
+                                : "text-slate-700"
                             }`}
                           >
                             <span className="text-[11px] font-bold truncate max-w-[70%]">
@@ -1875,8 +2054,8 @@ export default function App() {
                               <span
                                 className={`text-[8px] font-bold ${
                                   isFiltered
-                                    ? "text-indigo-300"
-                                    : "text-slate-500"
+                                    ? "text-indigo-600"
+                                    : "text-slate-400"
                                 }`}
                               >
                                 {pct}%
@@ -1884,8 +2063,8 @@ export default function App() {
                               <span
                                 className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                   isFiltered
-                                    ? "bg-indigo-500 text-white"
-                                    : "bg-blue-500/10 text-blue-400"
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-blue-50 text-blue-600 border border-blue-100"
                                 }`}
                               >
                                 {val}
@@ -1899,8 +2078,8 @@ export default function App() {
                 </div>
 
                 {/* 2. ALL SYSTEMS Card */}
-                <div className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl shadow-inner flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-red-400 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-slate-800/0 py-1">
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
+                  <h4 className="text-[10px] font-black text-red-650 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <Settings size={14} /> ALL SYSTEMS
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
@@ -1915,10 +2094,10 @@ export default function App() {
                             onClick={() =>
                               handleToggleModalFilter("system", name)
                             }
-                            className={`flex justify-between items-center border-b border-slate-700/30 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-800 ${
+                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
                               isFiltered
-                                ? "bg-red-600/20 border-l-4 border-red-500 text-red-300 font-black"
-                                : "text-slate-300"
+                                ? "bg-red-50 border-l-4 border-red-500 text-red-700 font-black"
+                                : "text-slate-700"
                             }`}
                           >
                             <span className="text-[11px] font-bold truncate max-w-[70%]">
@@ -1927,7 +2106,7 @@ export default function App() {
                             <div className="flex items-center gap-1.5">
                               <span
                                 className={`text-[8px] font-bold ${
-                                  isFiltered ? "text-red-300" : "text-slate-500"
+                                  isFiltered ? "text-red-600" : "text-slate-400"
                                 }`}
                               >
                                 {pct}%
@@ -1936,7 +2115,7 @@ export default function App() {
                                 className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                   isFiltered
                                     ? "bg-red-500 text-white"
-                                    : "bg-red-500/10 text-red-400"
+                                    : "bg-red-50 text-red-600 border border-red-100"
                                 }`}
                               >
                                 {val}
@@ -1950,8 +2129,8 @@ export default function App() {
                 </div>
 
                 {/* 3. ALL PROBLEM TYPES Card */}
-                <div className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl shadow-inner flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-orange-400 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-slate-800/0 py-1">
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
+                  <h4 className="text-[10px] font-black text-orange-600 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <AlertTriangle size={14} /> ALL PROBLEM TYPES
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
@@ -1966,10 +2145,10 @@ export default function App() {
                             onClick={() =>
                               handleToggleModalFilter("problemType", name)
                             }
-                            className={`flex justify-between items-center border-b border-slate-700/30 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-800 ${
+                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
                               isFiltered
-                                ? "bg-orange-600/20 border-l-4 border-orange-500 text-orange-300 font-black"
-                                : "text-slate-300"
+                                ? "bg-orange-50 border-l-4 border-orange-500 text-orange-700 font-black"
+                                : "text-slate-700"
                             }`}
                           >
                             <span className="text-[11px] font-bold truncate max-w-[70%]">
@@ -1979,8 +2158,8 @@ export default function App() {
                               <span
                                 className={`text-[8px] font-bold ${
                                   isFiltered
-                                    ? "text-orange-300"
-                                    : "text-slate-500"
+                                    ? "text-orange-600"
+                                    : "text-slate-400"
                                 }`}
                               >
                                 {pct}%
@@ -1988,8 +2167,8 @@ export default function App() {
                               <span
                                 className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                   isFiltered
-                                    ? "bg-orange-500 text-white"
-                                    : "bg-orange-500/10 text-orange-400"
+                                    ? "bg-orange-600 text-white"
+                                    : "bg-orange-50 text-orange-600 border border-orange-100"
                                 }`}
                               >
                                 {val}
@@ -2003,26 +2182,26 @@ export default function App() {
                 </div>
 
                 {/* 4. MAX AGE Card */}
-                <div className="bg-indigo-900/20 border border-indigo-500/30 p-5 rounded-2xl shadow-inner flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+                <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
+                  <h4 className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
                     <Clock size={14} /> Max Equipment Age
                   </h4>
                   <div className="flex-1 flex justify-center items-center py-2">
-                    <span className="text-4xl font-black text-white italic drop-shadow-lg">
+                    <span className="text-4xl font-black text-slate-800 italic drop-shadow-sm">
                       {getModalSummary(selectedCallDetails.calls).maxAge}{" "}
                       <small className="text-sm not-italic opacity-60 ml-1">
                         YEAR
                       </small>
                     </span>
                   </div>
-                  <div className="pt-3 border-t border-indigo-500/20 flex items-end justify-between mt-auto">
+                  <div className="pt-3 border-t border-indigo-100 flex items-end justify-between mt-auto">
                     <div>
-                      <div className="text-[8px] font-black text-indigo-400 uppercase">
+                      <div className="text-[8px] font-black text-indigo-500 uppercase">
                         Total Counts
                       </div>
-                      <div className="text-xl font-black text-white">
+                      <div className="text-xl font-black text-slate-800">
                         {sortedModalCalls.length}{" "}
-                        <small className="text-[9px] opacity-40 uppercase">
+                        <small className="text-[9px] opacity-60 uppercase">
                           {modalActiveFilter.type ? "Filtered" : "Calls"}
                         </small>
                       </div>
@@ -2030,41 +2209,42 @@ export default function App() {
                     {modalActiveFilter.type ? (
                       <button
                         onClick={handleClearModalFilter}
-                        className="text-[9px] bg-red-600 hover:bg-red-500 text-white font-bold py-1 px-2 rounded transition-all animate-bounce"
+                        className="text-[9px] bg-red-650 hover:bg-red-500 text-white font-bold py-1 px-2 rounded transition-all animate-bounce"
                       >
                         ล้างค่ากรอง
                       </button>
                     ) : (
-                      <Activity size={24} className="text-indigo-400/30" />
+                      <Activity size={24} className="text-indigo-400" />
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Call Details Table */}
-              <div className="bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl">
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[1200px]">
                     <thead>
-                      <tr className="border-b border-slate-700 text-[10px] font-black text-white uppercase tracking-widest bg-slate-950/40">
+                      <tr className="border-b border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-widest bg-slate-100">
                         <th className="py-5 px-6">TICKET NO</th>
                         <th
-                          className="py-5 px-6 cursor-pointer hover:bg-slate-800 transition-colors"
+                          className="py-5 px-6 cursor-pointer hover:bg-slate-200 transition-colors"
                           onClick={() => handleModalSort("date")}
                         >
                           <div className="flex items-center gap-2">
-                            MONTH / DATE / YEAE
+                            MONTH / DATE / YEAR
                             {modalSortKey === "date" &&
                               (modalSortDirection === "asc" ? (
-                                <ArrowUp size={14} className="text-red-400" />
+                                <ArrowUp size={14} className="text-red-500" />
                               ) : (
-                                <ArrowDown size={14} className="text-red-400" />
+                                <ArrowDown size={14} className="text-red-500" />
                               ))}
                             {modalSortKey !== "date" && (
                               <ArrowUpDown size={14} className="opacity-30" />
                             )}
                           </div>
                         </th>
+                        <th className="py-5 px-6">EQUIPMENT อุปกรณ์</th>
                         <th className="py-5 px-6">PROBLEM TYPE</th>
                         <th className="py-5 px-6">SYSTEM</th>
                         <th className="py-5 px-6">
@@ -2074,7 +2254,7 @@ export default function App() {
                         </th>
                         <th className="py-5 px-6">CAUSE สาเหตุ</th>
                         <th
-                          className="py-5 px-6 text-center cursor-pointer hover:bg-slate-800 transition-colors"
+                          className="py-5 px-6 text-center cursor-pointer hover:bg-slate-200 transition-colors"
                           onClick={() => handleModalSort("age")}
                         >
                           <div className="flex items-center justify-center gap-2">
@@ -2083,12 +2263,12 @@ export default function App() {
                               (modalSortDirection === "asc" ? (
                                 <ArrowUp
                                   size={14}
-                                  className="text-indigo-400"
+                                  className="text-indigo-600"
                                 />
                               ) : (
                                 <ArrowDown
                                   size={14}
-                                  className="text-indigo-400"
+                                  className="text-indigo-600"
                                 />
                               ))}
                             {modalSortKey !== "age" && (
@@ -2098,44 +2278,56 @@ export default function App() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-700/50 font-sans">
+                    <tbody className="divide-y divide-slate-100 font-sans">
                       {sortedModalCalls.length > 0 ? (
                         sortedModalCalls.map((call, idx) => (
                           <tr
                             key={idx}
-                            className="hover:bg-slate-800/50 transition-colors group"
+                            className="hover:bg-slate-50 transition-colors group"
                           >
                             <td className="py-5 px-6">
-                              <div className="text-sm font-black text-blue-300">
+                              <div className="text-sm font-black text-blue-600">
                                 {call.ticket_no}
                               </div>
-                              <div className="text-[9px] text-white font-bold mt-1 opacity-80">
+                              <div className="text-[9px] text-slate-500 font-bold mt-1">
                                 {call.product_type || "N/A"}
                               </div>
+                              {call.repeat_call &&
+                                call.repeat_call !== "ไม่มี Call ซ่อมซ้ำ" &&
+                                call.repeat_call !== "ไม่มี" && (
+                                  <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[8px] font-black rounded border border-orange-200">
+                                    ซ่อมซ้ำ
+                                  </span>
+                                )}
                             </td>
                             <td className="py-5 px-6">
-                              <div className="text-xs font-medium text-white">
+                              <div className="text-xs font-medium text-slate-800">
                                 {call.date}
                               </div>
-                              <div className="text-[9px] text-indigo-200 font-black mt-1 uppercase bg-indigo-500/20 inline-block px-2 py-0.5 rounded border border-indigo-500/40">
+                              <div className="text-[9px] text-indigo-700 font-black mt-1 uppercase bg-indigo-50 inline-block px-2 py-0.5 rounded border border-indigo-100">
                                 {formatMonthLabel(call.month)}
                               </div>
                             </td>
                             <td className="py-5 px-6">
-                              <span className="px-3 py-1 bg-red-500/20 text-red-300 text-[10px] font-black rounded-lg border border-red-500/30 block text-center truncate max-w-[150px]">
+                              <div className="text-[11px] font-bold text-slate-700 leading-relaxed max-w-[150px]">
+                                {call.equipment || "-"}
+                              </div>
+                            </td>
+                            <td className="py-5 px-6">
+                              <span className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 text-[10px] font-black rounded-lg block text-center truncate max-w-[150px]">
                                 {call.problem_type || "-"}
                               </span>
                             </td>
-                            <td className="py-5 px-6 text-xs font-bold text-white">
+                            <td className="py-5 px-6 text-xs font-bold text-slate-800">
                               {call.system || "-"}
                             </td>
                             <td className="py-5 px-6">
-                              <div className="text-[11px] font-black text-white italic leading-relaxed max-w-[180px]">
+                              <div className="text-[11px] font-black text-slate-800 italic leading-relaxed max-w-[180px]">
                                 {call.damaged_parts || "-"}
                               </div>
                             </td>
                             <td className="py-5 px-6">
-                              <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700 text-[10px] text-indigo-100 font-bold leading-relaxed max-w-[200px]">
+                              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10px] text-slate-700 font-bold leading-relaxed max-w-[200px]">
                                 {call.cause || "-"}
                               </div>
                             </td>
@@ -2143,8 +2335,8 @@ export default function App() {
                               <div
                                 className={`inline-block px-3 py-1.5 rounded-full border text-[10px] font-black italic whitespace-nowrap ${
                                   parseFloat(call.equipment_age) > 5
-                                    ? "bg-red-500/20 text-red-400 border-red-500/40"
-                                    : "bg-slate-700 text-white border-slate-500"
+                                    ? "bg-red-50 text-red-600 border-red-200"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
                                 }`}
                               >
                                 {call.equipment_age &&
@@ -2158,7 +2350,7 @@ export default function App() {
                       ) : (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={8}
                             className="p-12 text-center text-slate-500 font-bold"
                           >
                             ไม่พบรายการตามตัวกรองที่เลือกในขณะนี้
@@ -2171,13 +2363,13 @@ export default function App() {
               </div>
             </div>
 
-            <div className="p-8 bg-slate-900 border-t border-slate-700 flex justify-end items-center">
+            <div className="p-8 bg-slate-50 border-t border-slate-200 flex justify-end items-center">
               <button
                 onClick={() => {
                   setSelectedCallDetails(null);
                   handleClearModalFilter();
                 }}
-                className="px-12 py-4 bg-white hover:bg-slate-200 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+                className="px-12 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
               >
                 Close Dashboard
               </button>
