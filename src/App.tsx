@@ -53,9 +53,10 @@ import {
 
 // ✅ CSV Parser V3 (CodeSandbox Infinite-Loop Bypass Edition)
 // ใช้ Array methods เพื่อหลีกเลี่ยงการถูก CodeSandbox บล็อกลูปเกิน 100,000 รอบ
-const parseCSV = (csvText) => {
-  const rows = [];
-  let row = [];
+const parseCSV = (csvText: string) => {
+  const rows: any[][] = [];
+  // แก้จาก let row = [];
+  let row: any[] = [];
   let inQuotes = false;
   let currentValue = "";
 
@@ -103,7 +104,7 @@ const parseCSV = (csvText) => {
   return rows;
 };
 
-const formatMonthLabel = (YYYYMM) => {
+const formatMonthLabel = (YYYYMM: string) => {
   if (!YYYYMM) return "";
   const parts = YYYYMM.split("-");
   if (parts.length < 2) return YYYYMM;
@@ -114,7 +115,7 @@ const formatMonthLabel = (YYYYMM) => {
 };
 
 // ปรับปรุงไม่ให้ใช้ for loop ลดการแจ้งเตือนจาก Sandbox
-const parseDateToTimestamp = (dateStr) => {
+const parseDateToTimestamp = (dateStr: string) => {
   if (!dateStr || dateStr === "-") return 0;
 
   const thaiMonthsObj = {
@@ -204,7 +205,7 @@ const parseDateToTimestamp = (dateStr) => {
   return 0;
 };
 
-const getRankColor = (rank, count) => {
+const getRankColor = (rank: number, count: number): string => {
   if (count === 0 || rank === 0)
     return "bg-slate-800/40 text-slate-400 border-slate-700/50";
   if (rank === 1)
