@@ -1897,10 +1897,10 @@ export default function App() {
                                         : "opacity-75 group-hover:opacity-100 hover:scale-105"
                                     }`}
                                   >
-                                    <div className="text-sm font-black text-white">
+                                    <div className="text-sm font-black">
                                       {h.rank > 0 ? h.rank : "-"}
                                     </div>
-                                    <div className="text-[9px] font-bold text-white opacity-90">
+                                    <div className="text-[9px] font-bold opacity-90">
                                       ({h.count})
                                     </div>
                                   </div>
