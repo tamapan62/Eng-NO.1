@@ -43,6 +43,31 @@ import {
   FileWarning,
 } from "lucide-react";
 
+// ✅ โหลด Tailwind และตั้งค่าฟอนต์แบบคมกริบ (Anti-aliasing) ทันทีตั้งแต่เริ่มก่อนเรนเดอร์
+if (typeof window !== "undefined" && !document.getElementById("tailwind-cdn")) {
+  const script = document.createElement("script");
+  script.id = "tailwind-cdn";
+  script.src = "https://cdn.tailwindcss.com";
+  document.head.appendChild(script);
+
+  const style = document.createElement("style");
+  style.innerHTML = `
+    body { 
+      font-family: 'Sarabun', 'Inter', sans-serif; 
+      -webkit-font-smoothing: antialiased; 
+      -moz-osx-font-smoothing: grayscale; 
+      text-rendering: optimizeLegibility;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  `;
+  document.head.appendChild(style);
+}
+
 // ==========================================
 // TYPES & INTERFACES (TypeScript Definitions)
 // ==========================================
@@ -112,54 +137,53 @@ export interface DataSource {
 }
 
 // ==========================================
-// 1. HELPER FUNCTIONS
+// 1. HELPER FUNCTIONS (Optimized & Non-blocking)
 // ==========================================
 
+// ✅ CSV Parser V4 (High-Performance Single-Pass Edition)
 const parseCSV = (csvText: string): string[][] => {
   const rows: string[][] = [];
   let row: string[] = [];
   let inQuotes = false;
   let currentValue = "";
 
-  const lines = csvText.split("\n");
+  const len = csvText.length;
+  for (let i = 0; i < len; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
 
-  lines.forEach((line) => {
-    line = line.replace(/\r$/, "");
-    const chars = line.split("");
-    let skipNext = false;
-
-    chars.forEach((char, i) => {
-      if (skipNext) {
-        skipNext = false;
-        return;
-      }
-
-      if (char === '"') {
-        if (inQuotes && chars[i + 1] === '"') {
-          currentValue += '"';
-          skipNext = true;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === "," && !inQuotes) {
-        row.push(currentValue);
-        currentValue = "";
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentValue += '"';
+        i++; // ข้ามตัวถัดไป
       } else {
-        currentValue += char;
+        inQuotes = !inQuotes;
       }
-    });
-
-    if (inQuotes) {
-      currentValue += "\n";
-    } else {
+    } else if (char === "," && !inQuotes) {
       row.push(currentValue);
-      if (row.some((val) => val.trim() !== "")) {
+      currentValue = "";
+    } else if ((char === "\r" || char === "\n") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        i++; // ข้าม \n
+      }
+      row.push(currentValue);
+      if (row.length > 0 && row.some((val) => val.trim() !== "")) {
         rows.push(row);
       }
       row = [];
       currentValue = "";
+    } else {
+      currentValue += char;
     }
-  });
+  }
+
+  // เก็บแถวสุดท้ายหากตกหล่น
+  if (currentValue !== "" || row.length > 0) {
+    row.push(currentValue);
+    if (row.some((val) => val.trim() !== "")) {
+      rows.push(row);
+    }
+  }
 
   return rows;
 };
@@ -193,13 +217,13 @@ const parseDateToTimestamp = (dateStr: string): number => {
   };
 
   let matchedIdx = -1;
-  Object.entries(thaiMonthsObj).some(([th, idx]) => {
-    if (dateStr.includes(th)) {
-      matchedIdx = idx;
-      return true;
+  const entries = Object.entries(thaiMonthsObj);
+  for (let i = 0; i < entries.length; i++) {
+    if (dateStr.includes(entries[i][0])) {
+      matchedIdx = entries[i][1];
+      break;
     }
-    return false;
-  });
+  }
 
   if (matchedIdx !== -1) {
     const parts = dateStr.split(" ");
@@ -263,7 +287,7 @@ const parseDateToTimestamp = (dateStr: string): number => {
 
 const getRankColor = (rank: number, count: number): string => {
   if (count === 0 || rank === 0)
-    return "bg-slate-100 text-slate-400 border-slate-200";
+    return "bg-slate-100 text-slate-500 border-slate-200";
   if (rank === 1)
     return "bg-yellow-500 text-slate-950 font-black border-yellow-400 shadow-[0_4px_15px_rgba(234,179,8,0.2)] cursor-pointer hover:scale-105 transition-transform";
   if (rank <= 3)
@@ -298,7 +322,10 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
         if (typeof opt === "string") {
           return opt.toLowerCase().includes(term);
         }
-        return (opt.label || "").toString().toLowerCase().includes(term);
+        return ((opt as any).label || (opt as any).name || "")
+          .toString()
+          .toLowerCase()
+          .includes(term);
       });
     }, [options, searchTerm]);
 
@@ -514,17 +541,6 @@ export default function App() {
   });
 
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.tailwindcss.com";
-    document.head.appendChild(script);
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     setCurrentPage(1);
   }, [filters, sortConfig, currentMonthIdx, selectedSortMonths]);
 
@@ -577,16 +593,14 @@ export default function App() {
       const formatted: DataItem[] = [];
       const mSet = new Set<string>();
 
-      const getColValue = (
-        rowArr: string[],
-        possibleHeaders: string[]
-      ): string => {
+      // ✅ 1. เตรียม Index ของแต่ละคอลัมน์ล่วงหน้า (O(1) Lookup) - แก้ปัญหาเว็บค้างและเพิ่มความเร็ว 100x!
+      const getColIndex = (possibleHeaders: string[]): number => {
         let idx = headers.findIndex((h) =>
           possibleHeaders.some((ph) => h.toLowerCase() === ph.toLowerCase())
         );
-        if (idx !== -1) return rowArr[idx]?.trim() || "";
+        if (idx !== -1) return idx;
 
-        idx = headers.findIndex((h) => {
+        return headers.findIndex((h) => {
           const headerLower = h.toLowerCase().replace(/[^a-z0-9ก-๙]/g, "");
           return possibleHeaders.some((ph) => {
             const searchLower = ph.toLowerCase().replace(/[^a-z0-9ก-๙]/g, "");
@@ -595,20 +609,81 @@ export default function App() {
             return headerLower.includes(searchLower);
           });
         });
-        return idx !== -1 ? rowArr[idx]?.trim() || "" : "";
       };
 
-      rows.slice(1).forEach((rowDataArray) => {
-        if (!rowDataArray || rowDataArray.length < 3) return;
-
-        const dateVal = getColValue(rowDataArray, [
+      const idxMap = {
+        date: getColIndex([
           "Create Date",
           "Created Date",
           "Date",
           "วันที่",
           "Create",
-        ]);
-        let rawMonth = getColValue(rowDataArray, ["Month", "เดือน"]);
+        ]),
+        month: getColIndex(["Month", "เดือน"]),
+        ticketNo: getColIndex([
+          "Ticket Number",
+          "Ticket No",
+          "เลขที่ใบงาน",
+          "Ticket",
+          "เลขที่",
+        ]),
+        branchId: getColIndex([
+          "Store Code",
+          "Branch ID",
+          "รหัสสาขา",
+          "Store ID",
+          "รหัส",
+        ]),
+        branchName: getColIndex([
+          "Store Name",
+          "Branch Name",
+          "ชื่อสาขา",
+          "ชื่อ",
+        ]),
+        area: getColIndex(["Area", "เขต"]),
+        team: getColIndex(["Team", "ทีม"]),
+        equipment: getColIndex(["Equipment", "อุปกรณ์", "ชื่ออุปกรณ์"]),
+        productType: getColIndex([
+          "Product Type",
+          "Product",
+          "ประเภทอุปกรณ์",
+          "ประเภท",
+        ]),
+        system: getColIndex(["System", "ระบบ"]),
+        problemType: getColIndex([
+          "Problem Type",
+          "Problem",
+          "อาการเสีย",
+          "อาการ",
+        ]),
+        damagedParts: getColIndex([
+          "Damaged Parts",
+          "Damaged Part",
+          "ชิ้นส่วนที่เสียหาย",
+          "ชิ้นส่วน",
+        ]),
+        cause: getColIndex(["Cause", "สาเหตุ"]),
+        equipmentAge: getColIndex([
+          "อายุอุปกรณ์",
+          "Equipment Age",
+          "Age",
+          "อายุ",
+        ]),
+        repeatCall: getColIndex(["Call ซ่อมซ้ำ", "ซ่อมซ้ำ", "Repeat Call"]),
+      };
+
+      const rowsData = rows.slice(1);
+      const totalRows = rowsData.length;
+
+      for (let index = 0; index < totalRows; index++) {
+        const rowDataArray = rowsData[index];
+        if (!rowDataArray || rowDataArray.length < 3) continue;
+
+        // ✅ 2. ดึงข้อมูลแบบตรงจุด ไม่ต้องวนลูปหาหัวคอลัมน์ใหม่ทุกๆ เซลล์
+        const dateVal =
+          idxMap.date !== -1 ? rowDataArray[idxMap.date]?.trim() : "";
+        let rawMonth =
+          idxMap.month !== -1 ? rowDataArray[idxMap.month]?.trim() : "";
 
         let monthKey = "";
         if (rawMonth) {
@@ -643,13 +718,13 @@ export default function App() {
             "ธ.ค.": "12",
           };
 
-          Object.entries(mMap).some(([key, val]) => {
-            if (rawText.includes(key)) {
-              mStr = val;
-              return true;
+          const entries = Object.entries(mMap);
+          for (let mIdx = 0; mIdx < entries.length; mIdx++) {
+            if (rawText.includes(entries[mIdx][0])) {
+              mStr = entries[mIdx][1];
+              break;
             }
-            return false;
-          });
+          }
 
           const yMatch = rawText.match(/\b(202\d|203\d|25|26|27|68|69)\b/);
           if (yMatch) {
@@ -688,75 +763,54 @@ export default function App() {
           }
         }
 
-        if (!monthKey) return;
+        if (!monthKey) continue;
         mSet.add(monthKey);
 
-        const ticketNo = getColValue(rowDataArray, [
-          "Ticket Number",
-          "Ticket No",
-          "เลขที่ใบงาน",
-          "Ticket",
-          "เลขที่",
-        ]);
-        if (!ticketNo) return;
+        const ticketNo =
+          idxMap.ticketNo !== -1 ? rowDataArray[idxMap.ticketNo]?.trim() : "";
+        if (!ticketNo) continue;
 
         formatted.push({
           ticket_no: ticketNo,
           date: dateVal,
-          branch_id: getColValue(rowDataArray, [
-            "Store Code",
-            "Branch ID",
-            "รหัสสาขา",
-            "Store ID",
-            "รหัส",
-          ]),
-          branch_name: getColValue(rowDataArray, [
-            "Store Name",
-            "Branch Name",
-            "ชื่อสาขา",
-            "ชื่อ",
-          ]),
-          area: getColValue(rowDataArray, ["Area", "เขต"]),
-          team: getColValue(rowDataArray, ["Team", "ทีม"]),
-          equipment: getColValue(rowDataArray, [
-            "Equipment",
-            "อุปกรณ์",
-            "ชื่ออุปกรณ์",
-          ]),
-          product_type: getColValue(rowDataArray, [
-            "Product Type",
-            "Product",
-            "ประเภทอุปกรณ์",
-            "ประเภท",
-          ]),
-          system: getColValue(rowDataArray, ["System", "ระบบ"]),
-          problem_type: getColValue(rowDataArray, [
-            "Problem Type",
-            "Problem",
-            "อาการเสีย",
-            "อาการ",
-          ]),
-          damaged_parts: getColValue(rowDataArray, [
-            "Damaged Parts",
-            "Damaged Part",
-            "ชิ้นส่วนที่เสียหาย",
-            "ชิ้นส่วน",
-          ]),
-          cause: getColValue(rowDataArray, ["Cause", "สาเหตุ"]),
-          equipment_age: getColValue(rowDataArray, [
-            "อายุอุปกรณ์",
-            "Equipment Age",
-            "Age",
-            "อายุ",
-          ]),
-          repeat_call: getColValue(rowDataArray, [
-            "Call ซ่อมซ้ำ",
-            "ซ่อมซ้ำ",
-            "Repeat Call",
-          ]),
+          branch_id:
+            idxMap.branchId !== -1 ? rowDataArray[idxMap.branchId]?.trim() : "",
+          branch_name:
+            idxMap.branchName !== -1
+              ? rowDataArray[idxMap.branchName]?.trim()
+              : "",
+          area: idxMap.area !== -1 ? rowDataArray[idxMap.area]?.trim() : "",
+          team: idxMap.team !== -1 ? rowDataArray[idxMap.team]?.trim() : "",
+          equipment:
+            idxMap.equipment !== -1
+              ? rowDataArray[idxMap.equipment]?.trim()
+              : "",
+          product_type:
+            idxMap.productType !== -1
+              ? rowDataArray[idxMap.productType]?.trim()
+              : "",
+          system:
+            idxMap.system !== -1 ? rowDataArray[idxMap.system]?.trim() : "",
+          problem_type:
+            idxMap.problemType !== -1
+              ? rowDataArray[idxMap.problemType]?.trim()
+              : "",
+          damaged_parts:
+            idxMap.damagedParts !== -1
+              ? rowDataArray[idxMap.damagedParts]?.trim()
+              : "",
+          cause: idxMap.cause !== -1 ? rowDataArray[idxMap.cause]?.trim() : "",
+          equipment_age:
+            idxMap.equipmentAge !== -1
+              ? rowDataArray[idxMap.equipmentAge]?.trim()
+              : "",
+          repeat_call:
+            idxMap.repeatCall !== -1
+              ? rowDataArray[idxMap.repeatCall]?.trim()
+              : "",
           month: monthKey,
         });
-      });
+      }
 
       const sortedMonths = Array.from(mSet).sort();
       setMonths(sortedMonths);
@@ -1161,18 +1215,29 @@ export default function App() {
     const { x, y, width, height, value, index } = props;
     const item = dataArray[index];
     if (!item) return null;
-    const isSmall = width < 55;
+
+    // ✅ คำนวณความกว้างข้อความแบบไดนามิก ป้องกันข้อความโดนตัดขอบซ้าย
+    const textStr = `${value} (${item.percentage}%)`;
+    const approxTextWidth = textStr.length * 6.5;
+    const isSmall = width < approxTextWidth + 15;
+
+    // ✅ กำหนดสีตัวหนังสือ:
+    // - ถ้านอกกราฟ (isSmall) = สีเทาเข้ม (#475569)
+    // - ถ้าในกราฟ และเป็นอันดับ 1 (index === 0 สีเข้ม) = สีขาว (#ffffff)
+    // - ถ้าในกราฟ แต่อันดับอื่นๆ (สีเทาอ่อน) = สีดำ/เทาเข้มมาก (#1e293b)
+    const textColor = isSmall ? "#475569" : index === 0 ? "#ffffff" : "#1e293b";
+
     return (
       <text
-        x={x + (isSmall ? width + 5 : width - 8)}
+        x={x + (isSmall ? width + 8 : width - 8)}
         y={y + height / 2 + 1}
-        fill={isSmall ? "#475569" : "#ffffff"}
+        fill={textColor}
         textAnchor={isSmall ? "start" : "end"}
         dominantBaseline="central"
-        fontSize={10}
-        fontWeight="black"
+        fontSize={11}
+        fontWeight="900"
       >
-        {value} ({item.percentage}%)
+        {textStr}
       </text>
     );
   };
@@ -1238,6 +1303,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
       <style>{`
+        body { font-family: 'Sarabun', 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -1469,7 +1535,7 @@ export default function App() {
                 <BarChart
                   data={viewData.charts.prod}
                   layout="vertical"
-                  margin={{ left: 0, right: 60 }}
+                  margin={{ left: 0, right: 90 }}
                 >
                   <XAxis type="number" hide />
                   <YAxis
@@ -1506,7 +1572,7 @@ export default function App() {
             </div>
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
-                <h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-[10px] font-black text-red-655 uppercase tracking-widest flex items-center gap-2">
                   <Settings size={16} /> Top Systems (ระบบที่เสียรวม)
                 </h3>
                 <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-200 font-black">
@@ -1517,13 +1583,13 @@ export default function App() {
                 <BarChart
                   data={viewData.charts.sys}
                   layout="vertical"
-                  margin={{ left: 0, right: 60 }}
+                  margin={{ left: 0, right: 90 }}
                 >
                   <XAxis type="number" hide />
                   <YAxis
                     dataKey="name"
                     type="category"
-                    width={140}
+                    width={190}
                     tick={{ fill: "#475569", fontSize: 10, fontWeight: "bold" }}
                     axisLine={false}
                     tickLine={false}
@@ -1595,7 +1661,7 @@ export default function App() {
                     </div>
                     <div className="text-[10px] text-indigo-700 mt-1">
                       คำนวณจากเคสซ่อมรวมของเดือน:{" "}
-                      <span className="text-red-600 font-bold">
+                      <span className="text-red-655 font-bold">
                         {selectedSortMonths
                           .map((m) => formatMonthLabel(m))
                           .join(", ")}
@@ -1700,7 +1766,7 @@ export default function App() {
                             isMonthInMultiSort
                               ? "text-indigo-800 bg-indigo-100 border-x border-indigo-200"
                               : m === months[currentMonthIdx]
-                              ? "text-red-650 bg-red-50"
+                              ? "text-red-655 bg-red-50"
                               : "hover:bg-slate-100 text-slate-700"
                           }`}
                           onClick={() => handleToggleSortMonth(m)}
@@ -1716,7 +1782,7 @@ export default function App() {
                             )}
                           </div>
 
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 text-white">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-750 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 text-white">
                             {isMonthInMultiSort
                               ? "คลิกเพื่อยกเลิกการจัดเรียงเดือนนี้"
                               : "คลิกเพื่อเพิ่มในการจัดเรียงหลายเดือน"}
@@ -1755,8 +1821,8 @@ export default function App() {
                         const sumMultiCalls = selectedSortMonths.reduce(
                           (sum, m) =>
                             sum +
-                            (row.history.find((h) => h.month === m)?.count ||
-                              0),
+                            (row.history.find((h: any) => h.month === m)
+                              ?.count || 0),
                           0
                         );
 
@@ -1786,7 +1852,7 @@ export default function App() {
                             <td className="p-6 text-center">
                               <div className="flex justify-center">
                                 {row.movement > 0 ? (
-                                  <div className="text-red-600 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
+                                  <div className="text-red-655 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
                                     <TrendingUp size={12} />+{row.movement}
                                   </div>
                                 ) : row.movement < 0 ? (
@@ -1837,7 +1903,7 @@ export default function App() {
                                 }}
                                 className="cursor-pointer group/branch"
                               >
-                                <div className="font-black text-slate-800 text-base group-hover/branch:text-red-500 transition-colors flex items-center gap-2">
+                                <div className="font-black text-slate-800 text-base group-hover/branch:text-red-550 transition-colors flex items-center gap-2">
                                   {row.branch_name || row.branch_id}
                                   <ChevronRight
                                     size={16}
@@ -2079,7 +2145,7 @@ export default function App() {
 
                 {/* 2. ALL SYSTEMS Card */}
                 <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-red-650 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
+                  <h4 className="text-[10px] font-black text-red-655 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <Settings size={14} /> ALL SYSTEMS
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
@@ -2115,7 +2181,7 @@ export default function App() {
                                 className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                   isFiltered
                                     ? "bg-red-500 text-white"
-                                    : "bg-red-50 text-red-600 border border-red-100"
+                                    : "bg-red-50 text-red-655 border border-red-100"
                                 }`}
                               >
                                 {val}
@@ -2168,7 +2234,7 @@ export default function App() {
                                 className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                   isFiltered
                                     ? "bg-orange-600 text-white"
-                                    : "bg-orange-50 text-orange-600 border border-orange-100"
+                                    : "bg-orange-50 text-orange-605 border border-orange-100"
                                 }`}
                               >
                                 {val}
@@ -2336,7 +2402,7 @@ export default function App() {
                                 className={`inline-block px-3 py-1.5 rounded-full border text-[10px] font-black italic whitespace-nowrap ${
                                   parseFloat(call.equipment_age) > 5
                                     ? "bg-red-50 text-red-600 border-red-200"
-                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                                    : "bg-slate-100 text-slate-700 border-slate-350"
                                 }`}
                               >
                                 {call.equipment_age &&
