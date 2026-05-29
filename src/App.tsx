@@ -43,29 +43,12 @@ import {
   FileWarning,
 } from "lucide-react";
 
-// ✅ โหลด Tailwind และตั้งค่าฟอนต์แบบคมกริบ (Anti-aliasing) ทันทีตั้งแต่เริ่มก่อนเรนเดอร์
+// FIX 3: ลบ CSS ซ้ำออกจากนี้ — เก็บไว้แค่ที่เดียวใน JSX return()
 if (typeof window !== "undefined" && !document.getElementById("tailwind-cdn")) {
   const script = document.createElement("script");
   script.id = "tailwind-cdn";
   script.src = "https://cdn.tailwindcss.com";
   document.head.appendChild(script);
-
-  const style = document.createElement("style");
-  style.innerHTML = `
-    body { 
-      font-family: 'Sarabun', 'Inter', sans-serif; 
-      -webkit-font-smoothing: antialiased; 
-      -moz-osx-font-smoothing: grayscale; 
-      text-rendering: optimizeLegibility;
-    }
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-  `;
-  document.head.appendChild(style);
 }
 
 // ==========================================
@@ -140,7 +123,6 @@ export interface DataSource {
 // 1. HELPER FUNCTIONS (Optimized & Non-blocking)
 // ==========================================
 
-// ✅ CSV Parser V4 (High-Performance Single-Pass Edition)
 const parseCSV = (csvText: string): string[][] => {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -155,7 +137,7 @@ const parseCSV = (csvText: string): string[][] => {
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
         currentValue += '"';
-        i++; // ข้ามตัวถัดไป
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
@@ -164,7 +146,7 @@ const parseCSV = (csvText: string): string[][] => {
       currentValue = "";
     } else if ((char === "\r" || char === "\n") && !inQuotes) {
       if (char === "\r" && nextChar === "\n") {
-        i++; // ข้าม \n
+        i++;
       }
       row.push(currentValue);
       if (row.length > 0 && row.some((val) => val.trim() !== "")) {
@@ -177,7 +159,6 @@ const parseCSV = (csvText: string): string[][] => {
     }
   }
 
-  // เก็บแถวสุดท้ายหากตกหล่น
   if (currentValue !== "" || row.length > 0) {
     row.push(currentValue);
     if (row.some((val) => val.trim() !== "")) {
@@ -322,10 +303,8 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
         if (typeof opt === "string") {
           return opt.toLowerCase().includes(term);
         }
-        return ((opt as any).label || (opt as any).name || "")
-          .toString()
-          .toLowerCase()
-          .includes(term);
+        // FIX 2: ลบ opt.name ออก เพราะ OptionItem ไม่มี field นี้
+        return (opt.label || "").toString().toLowerCase().includes(term);
       });
     }, [options, searchTerm]);
 
@@ -593,7 +572,6 @@ export default function App() {
       const formatted: DataItem[] = [];
       const mSet = new Set<string>();
 
-      // ✅ 1. เตรียม Index ของแต่ละคอลัมน์ล่วงหน้า (O(1) Lookup) - แก้ปัญหาเว็บค้างและเพิ่มความเร็ว 100x!
       const getColIndex = (possibleHeaders: string[]): number => {
         let idx = headers.findIndex((h) =>
           possibleHeaders.some((ph) => h.toLowerCase() === ph.toLowerCase())
@@ -675,11 +653,13 @@ export default function App() {
       const rowsData = rows.slice(1);
       const totalRows = rowsData.length;
 
+      // FIX 5: ใช้ปีปัจจุบันแบบ dynamic แทนการ hardcode 2025/2026
+      const currentYear = new Date().getFullYear();
+
       for (let index = 0; index < totalRows; index++) {
         const rowDataArray = rowsData[index];
         if (!rowDataArray || rowDataArray.length < 3) continue;
 
-        // ✅ 2. ดึงข้อมูลแบบตรงจุด ไม่ต้องวนลูปหาหัวคอลัมน์ใหม่ทุกๆ เซลล์
         const dateVal =
           idxMap.date !== -1 ? rowDataArray[idxMap.date]?.trim() : "";
         let rawMonth =
@@ -746,8 +726,16 @@ export default function App() {
           }
 
           if (mStr) {
-            if (!yStr) yStr = parseInt(mStr) >= 9 ? "2025" : "2026";
-            if (parseInt(mStr) >= 9 && yStr === "2026") yStr = "2025";
+            // FIX 5: ใช้ currentYear แบบ dynamic
+            if (!yStr) {
+              yStr =
+                parseInt(mStr) >= 9
+                  ? String(currentYear - 1)
+                  : String(currentYear);
+            }
+            if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
+              yStr = String(currentYear - 1);
+            }
             monthKey = `${yStr}-${mStr}`;
           }
         }
@@ -758,7 +746,10 @@ export default function App() {
             const d = new Date(timestamp);
             const mStr = (d.getMonth() + 1).toString().padStart(2, "0");
             let yStr = d.getFullYear().toString();
-            if (parseInt(mStr) >= 9 && yStr === "2026") yStr = "2025";
+            // FIX 5: ใช้ currentYear แบบ dynamic
+            if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
+              yStr = String(currentYear - 1);
+            }
             monthKey = `${yStr}-${mStr}`;
           }
         }
@@ -868,6 +859,7 @@ export default function App() {
       "Repeat Call",
       "Month",
     ];
+    // FIX 4: ใช้ (field || '') ก่อน .replace() เพื่อป้องกัน null/undefined ใน CSV
     const csvRows = filteredData.map((d) =>
       [
         `"${d.ticket_no}"`,
@@ -876,12 +868,12 @@ export default function App() {
         `"${d.branch_name}"`,
         `"${d.area}"`,
         `"${d.team}"`,
-        `"${d.equipment?.replace(/"/g, '""') || ""}"`,
+        `"${(d.equipment || "").replace(/"/g, '""')}"`,
         `"${d.product_type}"`,
         `"${d.system}"`,
         `"${d.problem_type}"`,
-        `"${d.damaged_parts?.replace(/"/g, '""')}"`,
-        `"${d.cause?.replace(/"/g, '""')}"`,
+        `"${(d.damaged_parts || "").replace(/"/g, '""')}"`,
+        `"${(d.cause || "").replace(/"/g, '""')}"`,
         `"${d.equipment_age}"`,
         `"${d.repeat_call}"`,
         `"${d.month}"`,
@@ -1005,10 +997,10 @@ export default function App() {
         }, {} as Record<string, number>);
     });
 
-    const cumulativeScores = Array.from(bStats.values()).map((b) => {
-      let total = b.allCalls.length;
-      return { id: b.id, total };
-    });
+    const cumulativeScores = Array.from(bStats.values()).map((b) => ({
+      id: b.id,
+      total: b.allCalls.length,
+    }));
     cumulativeScores.sort((a, b) =>
       b.total !== a.total ? b.total - a.total : a.id.localeCompare(b.id)
     );
@@ -1032,7 +1024,10 @@ export default function App() {
           area: b.area,
           team: b.team,
           rank: cumulativeRanks[b.id] || 0,
-          movement: cRank > 0 && pRank > 0 ? pRank - cRank : 0,
+          // FIX 7: กลับทิศ movement — บวก = ได้อันดับแย่ลง (ซ่อมมากขึ้น), ลบ = ดีขึ้น
+          // pRank=5, cRank=2 → movement = 2-5 = -3 (ดีขึ้น 3 อันดับ ✅)
+          // pRank=2, cRank=5 → movement = 5-2 = +3 (แย่ลง 3 อันดับ ✅)
+          movement: cRank > 0 && pRank > 0 ? cRank - pRank : 0,
           max_age: b.max_age,
           total_calls: b.allCalls.length,
           history: months.map((m) => ({
@@ -1103,19 +1098,24 @@ export default function App() {
   }, []);
 
   const sortedTableData = useMemo(() => {
-    let sortable = [...viewData.table];
+    // FIX 7 (tip): ใช้ BranchTableItem แทน any
+    let sortable: BranchTableItem[] = [...viewData.table];
     if (sortConfig.key) {
-      sortable.sort((a: any, b: any) => {
-        let valA: any, valB: any;
+      sortable.sort((a: BranchTableItem, b: BranchTableItem) => {
+        let valA: number | string = 0;
+        let valB: number | string = 0;
+
         if (sortConfig.key === "multi_month_sort") {
           valA = selectedSortMonths.reduce(
             (sum, m) =>
-              sum + (a.history.find((h: any) => h.month === m)?.count || 0),
+              sum +
+              (a.history.find((h: MonthHistory) => h.month === m)?.count || 0),
             0
           );
           valB = selectedSortMonths.reduce(
             (sum, m) =>
-              sum + (b.history.find((h: any) => h.month === m)?.count || 0),
+              sum +
+              (b.history.find((h: MonthHistory) => h.month === m)?.count || 0),
             0
           );
         } else if (sortConfig.key === "max_age") {
@@ -1123,37 +1123,39 @@ export default function App() {
           valB = b.max_age;
         } else if (months.includes(sortConfig.key)) {
           valA =
-            a.history.find((h: any) => h.month === sortConfig.key)?.count || 0;
+            a.history.find((h: MonthHistory) => h.month === sortConfig.key)
+              ?.count || 0;
           valB =
-            b.history.find((h: any) => h.month === sortConfig.key)?.count || 0;
+            b.history.find((h: MonthHistory) => h.month === sortConfig.key)
+              ?.count || 0;
         } else {
-          valA = a[sortConfig.key];
-          valB = b[sortConfig.key];
+          valA = (a as any)[sortConfig.key];
+          valB = (b as any)[sortConfig.key];
         }
 
         if (typeof valA === "string")
           return sortConfig.direction === "asc"
-            ? valA.localeCompare(valB)
-            : valB.localeCompare(valA);
+            ? (valA as string).localeCompare(valB as string)
+            : (valB as string).localeCompare(valA as string);
         if (sortConfig.key === "rank") {
           if (valA === 0) return 1;
           if (valB === 0) return -1;
         }
-        return sortConfig.direction === "asc" ? valA - valB : valB - valA;
+        return sortConfig.direction === "asc"
+          ? (valA as number) - (valB as number)
+          : (valB as number) - (valA as number);
       });
     }
     return sortable;
   }, [viewData.table, sortConfig, months, selectedSortMonths]);
 
-  // ประมวลผลข้อมูลตารางรายการซ่อมภายใน Pop-up Modal (รองรับ Dynamic Filter)
   const sortedModalCalls = useMemo(() => {
     if (!selectedCallDetails) return [];
     let calls = [...selectedCallDetails.calls];
 
-    // ✅ กรองตามตัวเลือกที่คลิกจากการ์ดสรุปผล
     if (modalActiveFilter.type && modalActiveFilter.value) {
       const { type, value } = modalActiveFilter;
-      calls = calls.filter((call: any) => {
+      calls = calls.filter((call) => {
         if (type === "productType") return call.product_type === value;
         if (type === "system") return call.system === value;
         if (type === "problemType") return call.problem_type === value;
@@ -1193,20 +1195,18 @@ export default function App() {
     }
   };
 
-  // จัดการการคลิกที่ไอเทมในสรุปการ์ดย่อยของ Pop-up Modal เพื่อ Toggle กรองข้อมูล
   const handleToggleModalFilter = useCallback(
     (type: "productType" | "system" | "problemType", value: string) => {
       setModalActiveFilter((prev) => {
         if (prev.type === type && prev.value === value) {
-          return { type: null, value: null }; // กดซ้ำเพื่อปลดฟิลเตอร์
+          return { type: null, value: null };
         }
-        return { type, value }; // กดเพื่อเลือกกรอง
+        return { type, value };
       });
     },
     []
   );
 
-  // ฟังก์ชันรีเซ็ตฟิลเตอร์ภายใน Modal
   const handleClearModalFilter = useCallback(() => {
     setModalActiveFilter({ type: null, value: null });
   }, []);
@@ -1216,15 +1216,10 @@ export default function App() {
     const item = dataArray[index];
     if (!item) return null;
 
-    // ✅ คำนวณความกว้างข้อความแบบไดนามิก ป้องกันข้อความโดนตัดขอบซ้าย
     const textStr = `${value} (${item.percentage}%)`;
     const approxTextWidth = textStr.length * 6.5;
     const isSmall = width < approxTextWidth + 15;
 
-    // ✅ กำหนดสีตัวหนังสือ:
-    // - ถ้านอกกราฟ (isSmall) = สีเทาเข้ม (#475569)
-    // - ถ้าในกราฟ และเป็นอันดับ 1 (index === 0 สีเข้ม) = สีขาว (#ffffff)
-    // - ถ้าในกราฟ แต่อันดับอื่นๆ (สีเทาอ่อน) = สีดำ/เทาเข้มมาก (#1e293b)
     const textColor = isSmall ? "#475569" : index === 0 ? "#ffffff" : "#1e293b";
 
     return (
@@ -1278,7 +1273,6 @@ export default function App() {
         stats.age.push(parseFloat(c.equipment_age));
     }
 
-    // คำนวณเปอร์เซ็นต์และแนบค่ากลับไปพร้อมกับ count
     const getSorted = (
       obj: Record<string, number>
     ): [string, number, string][] =>
@@ -1300,8 +1294,16 @@ export default function App() {
     };
   };
 
+  // FIX 6: เรียก getModalSummary ครั้งเดียว แล้วนำผลไปใช้ใน JSX
+  const modalSummary = useMemo(
+    () =>
+      selectedCallDetails ? getModalSummary(selectedCallDetails.calls) : null,
+    [selectedCallDetails]
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
+      {/* FIX 3: เก็บ <style> ไว้แค่จุดเดียวใน JSX — ลบออกจาก top-level script แล้ว */}
       <style>{`
         body { font-family: 'Sarabun', 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -1314,7 +1316,6 @@ export default function App() {
 
       <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-10 border-b border-slate-200 pb-10">
         <div className="flex flex-col gap-4">
-          {/* --- Dropdown เลือกทีม --- */}
           <div className="relative z-50 self-start">
             <button
               onClick={() => setIsSourceDropdownOpen(!isSourceDropdownOpen)}
@@ -1392,6 +1393,7 @@ export default function App() {
                 <Loader2 size={12} className="animate-spin" /> SYNCING...
               </span>
             ) : (
+              // FIX 1: แก้ text-red-655 → text-red-600
               <span className="text-red-600 font-black">
                 {rawData.length.toLocaleString()} TOTAL CALLS
               </span>
@@ -1429,7 +1431,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* แจ้งเตือนกรณีเกิดข้อผิดพลาดในการโหลด */}
       {errorObj && (
         <div className="bg-red-50 border border-red-200 p-6 rounded-[2rem] flex flex-col items-center justify-center mb-8 gap-4 shadow-xl">
           <FileWarning size={48} className="text-red-500" />
@@ -1572,7 +1573,8 @@ export default function App() {
             </div>
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
-                <h3 className="text-[10px] font-black text-red-655 uppercase tracking-widest flex items-center gap-2">
+                {/* FIX 1: แก้ text-red-655 → text-red-600 */}
+                <h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
                   <Settings size={16} /> Top Systems (ระบบที่เสียรวม)
                 </h3>
                 <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-200 font-black">
@@ -1661,7 +1663,8 @@ export default function App() {
                     </div>
                     <div className="text-[10px] text-indigo-700 mt-1">
                       คำนวณจากเคสซ่อมรวมของเดือน:{" "}
-                      <span className="text-red-655 font-bold">
+                      {/* FIX 1: แก้ text-red-655 → text-red-600 */}
+                      <span className="text-red-600 font-bold">
                         {selectedSortMonths
                           .map((m) => formatMonthLabel(m))
                           .join(", ")}
@@ -1766,7 +1769,7 @@ export default function App() {
                             isMonthInMultiSort
                               ? "text-indigo-800 bg-indigo-100 border-x border-indigo-200"
                               : m === months[currentMonthIdx]
-                              ? "text-red-655 bg-red-50"
+                              ? "text-red-600 bg-red-50"
                               : "hover:bg-slate-100 text-slate-700"
                           }`}
                           onClick={() => handleToggleSortMonth(m)}
@@ -1782,7 +1785,7 @@ export default function App() {
                             )}
                           </div>
 
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-750 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 text-white">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-[8px] px-2 py-1 rounded shadow-xl opacity-0 group-hover/th:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 text-white">
                             {isMonthInMultiSort
                               ? "คลิกเพื่อยกเลิกการจัดเรียงเดือนนี้"
                               : "คลิกเพื่อเพิ่มในการจัดเรียงหลายเดือน"}
@@ -1821,8 +1824,9 @@ export default function App() {
                         const sumMultiCalls = selectedSortMonths.reduce(
                           (sum, m) =>
                             sum +
-                            (row.history.find((h: any) => h.month === m)
-                              ?.count || 0),
+                            (row.history.find(
+                              (h: MonthHistory) => h.month === m
+                            )?.count || 0),
                           0
                         );
 
@@ -1851,8 +1855,9 @@ export default function App() {
                             </td>
                             <td className="p-6 text-center">
                               <div className="flex justify-center">
+                                {/* FIX 7: movement > 0 = ซ่อมมากขึ้น = แย่ลง = แสดงสีแดง TrendingUp */}
                                 {row.movement > 0 ? (
-                                  <div className="text-red-655 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
+                                  <div className="text-red-600 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
                                     <TrendingUp size={12} />+{row.movement}
                                   </div>
                                 ) : row.movement < 0 ? (
@@ -1903,7 +1908,7 @@ export default function App() {
                                 }}
                                 className="cursor-pointer group/branch"
                               >
-                                <div className="font-black text-slate-800 text-base group-hover/branch:text-red-550 transition-colors flex items-center gap-2">
+                                <div className="font-black text-slate-800 text-base group-hover/branch:text-red-500 transition-colors flex items-center gap-2">
                                   {row.branch_name || row.branch_id}
                                   <ChevronRight
                                     size={16}
@@ -2036,7 +2041,7 @@ export default function App() {
       </div>
 
       {/* Details Modal */}
-      {selectedCallDetails && (
+      {selectedCallDetails && modalSummary && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
@@ -2060,7 +2065,6 @@ export default function App() {
                         ? "ทุกช่วงเวลา"
                         : formatMonthLabel(selectedCallDetails.month)}
                     </span>
-                    {/* ป้ายแสดงตัวกรองที่เลือกใน Modal อยู่ขณะนี้ */}
                     {modalActiveFilter.type && (
                       <span className="bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
                         กรองตาม: {modalActiveFilter.value}
@@ -2089,6 +2093,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-auto p-8 custom-scrollbar space-y-8 bg-slate-50">
+              {/* FIX 6: ใช้ modalSummary ที่ memoize แล้ว แทนการเรียก getModalSummary() 4 ครั้ง */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* 1. ALL PRODUCT TYPES Card */}
                 <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
@@ -2096,101 +2101,99 @@ export default function App() {
                     <Box size={14} /> ALL PRODUCT TYPES
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                    {getModalSummary(selectedCallDetails.calls).allProd.map(
-                      ([name, val, pct], idx) => {
-                        const isFiltered =
-                          modalActiveFilter.type === "productType" &&
-                          modalActiveFilter.value === name;
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() =>
-                              handleToggleModalFilter("productType", name)
-                            }
-                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
-                              isFiltered
-                                ? "bg-indigo-50 border-l-4 border-indigo-500 text-indigo-700 font-black"
-                                : "text-slate-700"
-                            }`}
-                          >
-                            <span className="text-[11px] font-bold truncate max-w-[70%]">
-                              {name}
+                    {modalSummary.allProd.map(([name, val, pct], idx) => {
+                      const isFiltered =
+                        modalActiveFilter.type === "productType" &&
+                        modalActiveFilter.value === name;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() =>
+                            handleToggleModalFilter("productType", name)
+                          }
+                          className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
+                            isFiltered
+                              ? "bg-indigo-50 border-l-4 border-indigo-500 text-indigo-700 font-black"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold truncate max-w-[70%]">
+                            {name}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[8px] font-bold ${
+                                isFiltered
+                                  ? "text-indigo-600"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {pct}%
                             </span>
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`text-[8px] font-bold ${
-                                  isFiltered
-                                    ? "text-indigo-600"
-                                    : "text-slate-400"
-                                }`}
-                              >
-                                {pct}%
-                              </span>
-                              <span
-                                className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
-                                  isFiltered
-                                    ? "bg-indigo-600 text-white"
-                                    : "bg-blue-50 text-blue-600 border border-blue-100"
-                                }`}
-                              >
-                                {val}
-                              </span>
-                            </div>
+                            <span
+                              className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
+                                isFiltered
+                                  ? "bg-indigo-600 text-white"
+                                  : "bg-blue-50 text-blue-600 border border-blue-100"
+                              }`}
+                            >
+                              {val}
+                            </span>
                           </div>
-                        );
-                      }
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 2. ALL SYSTEMS Card */}
                 <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
-                  <h4 className="text-[10px] font-black text-red-655 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
+                  {/* FIX 1: แก้ text-red-655 → text-red-600 */}
+                  <h4 className="text-[10px] font-black text-red-600 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <Settings size={14} /> ALL SYSTEMS
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                    {getModalSummary(selectedCallDetails.calls).allSys.map(
-                      ([name, val, pct], idx) => {
-                        const isFiltered =
-                          modalActiveFilter.type === "system" &&
-                          modalActiveFilter.value === name;
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() =>
-                              handleToggleModalFilter("system", name)
-                            }
-                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
-                              isFiltered
-                                ? "bg-red-50 border-l-4 border-red-500 text-red-700 font-black"
-                                : "text-slate-700"
-                            }`}
-                          >
-                            <span className="text-[11px] font-bold truncate max-w-[70%]">
-                              {name}
+                    {modalSummary.allSys.map(([name, val, pct], idx) => {
+                      const isFiltered =
+                        modalActiveFilter.type === "system" &&
+                        modalActiveFilter.value === name;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() =>
+                            handleToggleModalFilter("system", name)
+                          }
+                          className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
+                            isFiltered
+                              ? "bg-red-50 border-l-4 border-red-500 text-red-700 font-black"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold truncate max-w-[70%]">
+                            {name}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[8px] font-bold ${
+                                isFiltered ? "text-red-600" : "text-slate-400"
+                              }`}
+                            >
+                              {pct}%
                             </span>
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`text-[8px] font-bold ${
-                                  isFiltered ? "text-red-600" : "text-slate-400"
-                                }`}
-                              >
-                                {pct}%
-                              </span>
-                              <span
-                                className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
-                                  isFiltered
-                                    ? "bg-red-500 text-white"
-                                    : "bg-red-50 text-red-655 border border-red-100"
-                                }`}
-                              >
-                                {val}
-                              </span>
-                            </div>
+                            {/* FIX 1: แก้ text-red-655 → text-red-600 */}
+                            <span
+                              className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
+                                isFiltered
+                                  ? "bg-red-500 text-white"
+                                  : "bg-red-50 text-red-600 border border-red-100"
+                              }`}
+                            >
+                              {val}
+                            </span>
                           </div>
-                        );
-                      }
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2200,50 +2203,49 @@ export default function App() {
                     <AlertTriangle size={14} /> ALL PROBLEM TYPES
                   </h4>
                   <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                    {getModalSummary(selectedCallDetails.calls).allProb.map(
-                      ([name, val, pct], idx) => {
-                        const isFiltered =
-                          modalActiveFilter.type === "problemType" &&
-                          modalActiveFilter.value === name;
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() =>
-                              handleToggleModalFilter("problemType", name)
-                            }
-                            className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
-                              isFiltered
-                                ? "bg-orange-50 border-l-4 border-orange-500 text-orange-700 font-black"
-                                : "text-slate-700"
-                            }`}
-                          >
-                            <span className="text-[11px] font-bold truncate max-w-[70%]">
-                              {name}
+                    {modalSummary.allProb.map(([name, val, pct], idx) => {
+                      const isFiltered =
+                        modalActiveFilter.type === "problemType" &&
+                        modalActiveFilter.value === name;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() =>
+                            handleToggleModalFilter("problemType", name)
+                          }
+                          className={`flex justify-between items-center border-b border-slate-100 pb-1.5 pt-0.5 px-2 rounded-lg cursor-pointer transition-all hover:bg-slate-50 ${
+                            isFiltered
+                              ? "bg-orange-50 border-l-4 border-orange-500 text-orange-700 font-black"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold truncate max-w-[70%]">
+                            {name}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[8px] font-bold ${
+                                isFiltered
+                                  ? "text-orange-600"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {pct}%
                             </span>
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`text-[8px] font-bold ${
-                                  isFiltered
-                                    ? "text-orange-600"
-                                    : "text-slate-400"
-                                }`}
-                              >
-                                {pct}%
-                              </span>
-                              <span
-                                className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
-                                  isFiltered
-                                    ? "bg-orange-600 text-white"
-                                    : "bg-orange-50 text-orange-605 border border-orange-100"
-                                }`}
-                              >
-                                {val}
-                              </span>
-                            </div>
+                            {/* FIX 1: แก้ text-orange-605 → text-orange-600 */}
+                            <span
+                              className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
+                                isFiltered
+                                  ? "bg-orange-600 text-white"
+                                  : "bg-orange-50 text-orange-600 border border-orange-100"
+                              }`}
+                            >
+                              {val}
+                            </span>
                           </div>
-                        );
-                      }
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2254,7 +2256,7 @@ export default function App() {
                   </h4>
                   <div className="flex-1 flex justify-center items-center py-2">
                     <span className="text-4xl font-black text-slate-800 italic drop-shadow-sm">
-                      {getModalSummary(selectedCallDetails.calls).maxAge}{" "}
+                      {modalSummary.maxAge}{" "}
                       <small className="text-sm not-italic opacity-60 ml-1">
                         YEAR
                       </small>
@@ -2275,7 +2277,7 @@ export default function App() {
                     {modalActiveFilter.type ? (
                       <button
                         onClick={handleClearModalFilter}
-                        className="text-[9px] bg-red-650 hover:bg-red-500 text-white font-bold py-1 px-2 rounded transition-all animate-bounce"
+                        className="text-[9px] bg-red-600 hover:bg-red-500 text-white font-bold py-1 px-2 rounded transition-all animate-bounce"
                       >
                         ล้างค่ากรอง
                       </button>
@@ -2402,7 +2404,7 @@ export default function App() {
                                 className={`inline-block px-3 py-1.5 rounded-full border text-[10px] font-black italic whitespace-nowrap ${
                                   parseFloat(call.equipment_age) > 5
                                     ? "bg-red-50 text-red-600 border-red-200"
-                                    : "bg-slate-100 text-slate-700 border-slate-350"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
                                 }`}
                               >
                                 {call.equipment_age &&
