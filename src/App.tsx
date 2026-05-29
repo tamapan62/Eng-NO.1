@@ -127,43 +127,49 @@ const parseCSV = (csvText: string): string[][] => {
   const rows: string[][] = [];
   let row: string[] = [];
   let inQuotes = false;
-  let currentValue = "";
-
+  let startIdx = 0;
   const len = csvText.length;
+
   for (let i = 0; i < len; i++) {
     const char = csvText[i];
-    const nextChar = csvText[i + 1];
 
     if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        currentValue += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
+      inQuotes = !inQuotes;
     } else if (char === "," && !inQuotes) {
-      row.push(currentValue);
-      currentValue = "";
-    } else if ((char === "\r" || char === "\n") && !inQuotes) {
-      if (char === "\r" && nextChar === "\n") {
-        i++;
+      let val = csvText.substring(startIdx, i);
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.substring(1, val.length - 1).replace(/""/g, '"');
       }
-      row.push(currentValue);
-      if (row.length > 0 && row.some((val) => val.trim() !== "")) {
+      row.push(val);
+      startIdx = i + 1;
+    } else if ((char === "\r" || char === "\n") && !inQuotes) {
+      let val = csvText.substring(startIdx, i);
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.substring(1, val.length - 1).replace(/""/g, '"');
+      }
+      row.push(val);
+
+      if (row.some((v) => v.trim() !== "")) {
         rows.push(row);
       }
       row = [];
-      currentValue = "";
-    } else {
-      currentValue += char;
+
+      if (char === "\r" && csvText[i + 1] === "\n") {
+        i++;
+      }
+      startIdx = i + 1;
     }
   }
 
-  if (currentValue !== "" || row.length > 0) {
-    row.push(currentValue);
-    if (row.some((val) => val.trim() !== "")) {
-      rows.push(row);
+  if (startIdx < len) {
+    let val = csvText.substring(startIdx, len);
+    if (val.startsWith('"') && val.endsWith('"')) {
+      val = val.substring(1, val.length - 1).replace(/""/g, '"');
     }
+    row.push(val);
+  }
+  if (row.length > 0 && row.some((v) => v.trim() !== "")) {
+    rows.push(row);
   }
 
   return rows;
@@ -324,7 +330,7 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
     };
 
     useEffect(() => {
-      const handleClickOutside = (e: MouseEvent) => {
+      const handleClickOutside = (e: MouseEvent | TouchEvent) => {
         if (
           containerRef.current &&
           !containerRef.current.contains(e.target as Node)
@@ -333,8 +339,14 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
         }
       };
       document.addEventListener("mousedown", handleClickOutside);
-      return () =>
+      // ✅ เพิ่ม touchstart เพื่อรองรับการใช้นิ้วแตะปิดเมนูบน iOS/iPadOS ได้อย่างลื่นไหล
+      document.addEventListener("touchstart", handleClickOutside, {
+        passive: true,
+      });
+      return () => {
         document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("touchstart", handleClickOutside);
+      };
     }, []);
 
     return (
@@ -537,7 +549,12 @@ export default function App() {
     }
 
     try {
-      const response = await fetch(selectedSource.url);
+      // ✅ ป้องกัน iOS Safari ดึงแคชเก่ามาแสดงและป้องกันการเกิดปัญหากับ CORS
+      const fetchUrl = selectedSource.url.includes("?")
+        ? `${selectedSource.url}&t=${Date.now()}`
+        : `${selectedSource.url}?t=${Date.now()}`;
+
+      const response = await fetch(fetchUrl);
 
       if (!response.ok) {
         throw new Error(
