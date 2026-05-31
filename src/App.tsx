@@ -43,16 +43,8 @@ import {
   FileWarning,
 } from "lucide-react";
 
-// FIX 3: ลบ CSS ซ้ำออกจากนี้ — เก็บไว้แค่ที่เดียวใน JSX return()
-if (typeof window !== "undefined" && !document.getElementById("tailwind-cdn")) {
-  const script = document.createElement("script");
-  script.id = "tailwind-cdn";
-  script.src = "https://cdn.tailwindcss.com";
-  document.head.appendChild(script);
-}
-
 // ==========================================
-// TYPES & INTERFACES (TypeScript Definitions)
+// TYPES & INTERFACES
 // ==========================================
 
 export interface DataItem {
@@ -120,59 +112,37 @@ export interface DataSource {
 }
 
 // ==========================================
-// 1. HELPER FUNCTIONS (Optimized & Non-blocking)
+// 1. HELPER FUNCTIONS (Ultra Optimized)
 // ==========================================
 
-const parseCSV = (csvText: string): string[][] => {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let inQuotes = false;
-  let startIdx = 0;
-  const len = csvText.length;
-
-  for (let i = 0; i < len; i++) {
-    const char = csvText[i];
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
-      let val = csvText.substring(startIdx, i);
-      if (val.startsWith('"') && val.endsWith('"')) {
-        val = val.substring(1, val.length - 1).replace(/""/g, '"');
-      }
-      row.push(val);
-      startIdx = i + 1;
-    } else if ((char === "\r" || char === "\n") && !inQuotes) {
-      let val = csvText.substring(startIdx, i);
-      if (val.startsWith('"') && val.endsWith('"')) {
-        val = val.substring(1, val.length - 1).replace(/""/g, '"');
-      }
-      row.push(val);
-
-      if (row.some((v) => v.trim() !== "")) {
-        rows.push(row);
-      }
-      row = [];
-
-      if (char === "\r" && csvText[i + 1] === "\n") {
-        i++;
-      }
-      startIdx = i + 1;
+// ✅ CSV Parser ระดับความเร็วสูงสุด (High-Performance Engine) ลดอาการค้าง
+const parseCSVFast = (text: string): string[][] => {
+  let p = "",
+    row: string[] = [""],
+    ret: string[][] = [row],
+    i = 0,
+    r = 0,
+    s = !0,
+    l;
+  for (let j = 0; j < text.length; j++) {
+    l = text[j];
+    if ('"' === l) {
+      if (s && l === p) row[i] += l;
+      s = !s;
+    } else if ("," === l && s) {
+      l = row[++i] = "";
+    } else if ("\n" === l && s) {
+      if ("\r" === p) row[i] = row[i].slice(0, -1);
+      row = ret[++r] = [(l = "")];
+      i = 0;
+    } else {
+      row[i] += l;
     }
+    p = l;
   }
-
-  if (startIdx < len) {
-    let val = csvText.substring(startIdx, len);
-    if (val.startsWith('"') && val.endsWith('"')) {
-      val = val.substring(1, val.length - 1).replace(/""/g, '"');
-    }
-    row.push(val);
-  }
-  if (row.length > 0 && row.some((v) => v.trim() !== "")) {
-    rows.push(row);
-  }
-
-  return rows;
+  return ret.filter(
+    (r) => r.length > 1 || (r.length === 1 && r[0].trim() !== "")
+  );
 };
 
 const formatMonthLabel = (YYYYMM: string): string => {
@@ -309,7 +279,6 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
         if (typeof opt === "string") {
           return opt.toLowerCase().includes(term);
         }
-        // FIX 2: ลบ opt.name ออก เพราะ OptionItem ไม่มี field นี้
         return (opt.label || "").toString().toLowerCase().includes(term);
       });
     }, [options, searchTerm]);
@@ -339,7 +308,6 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
         }
       };
       document.addEventListener("mousedown", handleClickOutside);
-      // ✅ เพิ่ม touchstart เพื่อรองรับการใช้นิ้วแตะปิดเมนูบน iOS/iPadOS ได้อย่างลื่นไหล
       document.addEventListener("touchstart", handleClickOutside, {
         passive: true,
       });
@@ -461,6 +429,49 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
 // 3. MAIN APPLICATION
 // ==========================================
 export default function App() {
+  const [isSystemReady, setIsSystemReady] = useState(false);
+
+  // ✅ ระบบ Pre-loader ตรวจสอบว่า Tailwind CSS และฟอนต์โหลดเสร็จสมบูรณ์หรือยัง ป้องกันหน้าเว็บพัง
+  useEffect(() => {
+    const hasTailwindClasses = () => {
+      const div = document.createElement("div");
+      div.className = "hidden";
+      document.body.appendChild(div);
+      const isHidden = getComputedStyle(div).display === "none";
+      document.body.removeChild(div);
+      return isHidden;
+    };
+
+    if (hasTailwindClasses() || (window as any).tailwind) {
+      setIsSystemReady(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.tailwindcss.com";
+    script.onload = () => setIsSystemReady(true);
+    script.onerror = () => setIsSystemReady(true); // ปล่อยผ่านถ้าโหลดไม่สำเร็จ (เผื่อเน็ตมีปัญหา)
+    document.head.appendChild(script);
+
+    const linkFont = document.createElement("link");
+    linkFont.rel = "stylesheet";
+    linkFont.href =
+      "https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,700;0,850;1,400&family=Inter:wght@400;700;900&display=swap";
+    document.head.appendChild(linkFont);
+
+    const style = document.createElement("style");
+    style.innerHTML = `
+      body { font-family: 'Sarabun', 'Inter', sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+      .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   const DATA_SOURCES = useMemo<DataSource[]>(
     () => [
       {
@@ -549,7 +560,6 @@ export default function App() {
     }
 
     try {
-      // ✅ ป้องกัน iOS Safari ดึงแคชเก่ามาแสดงและป้องกันการเกิดปัญหากับ CORS
       const fetchUrl = selectedSource.url.includes("?")
         ? `${selectedSource.url}&t=${Date.now()}`
         : `${selectedSource.url}?t=${Date.now()}`;
@@ -578,261 +588,293 @@ export default function App() {
       const text = await response.text();
       const cleanText = text.replace(/^\uFEFF/, "");
 
-      const rows = parseCSV(cleanText);
-      if (rows.length < 2) {
-        throw new Error("โครงสร้างไฟล์ข้อมูลว่างเปล่าหรือไม่ถูกต้อง");
-      }
+      // ✅ ปลดบล็อก Main Thread ด้วย setTimeout เพื่อให้หน้าจอมือถือแสดง Loading Spinner แทนการค้าง
+      setTimeout(() => {
+        try {
+          const rows = parseCSVFast(cleanText);
+          if (rows.length < 2) {
+            throw new Error("โครงสร้างไฟล์ข้อมูลว่างเปล่าหรือไม่ถูกต้อง");
+          }
 
-      const headers = rows[0].map((h) =>
-        h.replace(/[\u200B-\u200D\uFEFF"]/g, "").trim()
-      );
-      const formatted: DataItem[] = [];
-      const mSet = new Set<string>();
+          const headers = rows[0].map((h) =>
+            h.replace(/[\u200B-\u200D\uFEFF"]/g, "").trim()
+          );
+          const formatted: DataItem[] = [];
+          const mSet = new Set<string>();
 
-      const getColIndex = (possibleHeaders: string[]): number => {
-        let idx = headers.findIndex((h) =>
-          possibleHeaders.some((ph) => h.toLowerCase() === ph.toLowerCase())
-        );
-        if (idx !== -1) return idx;
+          const getColIndex = (possibleHeaders: string[]): number => {
+            let idx = headers.findIndex((h) =>
+              possibleHeaders.some((ph) => h.toLowerCase() === ph.toLowerCase())
+            );
+            if (idx !== -1) return idx;
 
-        return headers.findIndex((h) => {
-          const headerLower = h.toLowerCase().replace(/[^a-z0-9ก-๙]/g, "");
-          return possibleHeaders.some((ph) => {
-            const searchLower = ph.toLowerCase().replace(/[^a-z0-9ก-๙]/g, "");
-            if (searchLower === "age" && headerLower.includes("damaged"))
-              return false;
-            return headerLower.includes(searchLower);
-          });
-        });
-      };
-
-      const idxMap = {
-        date: getColIndex([
-          "Create Date",
-          "Created Date",
-          "Date",
-          "วันที่",
-          "Create",
-        ]),
-        month: getColIndex(["Month", "เดือน"]),
-        ticketNo: getColIndex([
-          "Ticket Number",
-          "Ticket No",
-          "เลขที่ใบงาน",
-          "Ticket",
-          "เลขที่",
-        ]),
-        branchId: getColIndex([
-          "Store Code",
-          "Branch ID",
-          "รหัสสาขา",
-          "Store ID",
-          "รหัส",
-        ]),
-        branchName: getColIndex([
-          "Store Name",
-          "Branch Name",
-          "ชื่อสาขา",
-          "ชื่อ",
-        ]),
-        area: getColIndex(["Area", "เขต"]),
-        team: getColIndex(["Team", "ทีม"]),
-        equipment: getColIndex(["Equipment", "อุปกรณ์", "ชื่ออุปกรณ์"]),
-        productType: getColIndex([
-          "Product Type",
-          "Product",
-          "ประเภทอุปกรณ์",
-          "ประเภท",
-        ]),
-        system: getColIndex(["System", "ระบบ"]),
-        problemType: getColIndex([
-          "Problem Type",
-          "Problem",
-          "อาการเสีย",
-          "อาการ",
-        ]),
-        damagedParts: getColIndex([
-          "Damaged Parts",
-          "Damaged Part",
-          "ชิ้นส่วนที่เสียหาย",
-          "ชิ้นส่วน",
-        ]),
-        cause: getColIndex(["Cause", "สาเหตุ"]),
-        equipmentAge: getColIndex([
-          "อายุอุปกรณ์",
-          "Equipment Age",
-          "Age",
-          "อายุ",
-        ]),
-        repeatCall: getColIndex(["Call ซ่อมซ้ำ", "ซ่อมซ้ำ", "Repeat Call"]),
-      };
-
-      const rowsData = rows.slice(1);
-      const totalRows = rowsData.length;
-
-      // FIX 5: ใช้ปีปัจจุบันแบบ dynamic แทนการ hardcode 2025/2026
-      const currentYear = new Date().getFullYear();
-
-      for (let index = 0; index < totalRows; index++) {
-        const rowDataArray = rowsData[index];
-        if (!rowDataArray || rowDataArray.length < 3) continue;
-
-        const dateVal =
-          idxMap.date !== -1 ? rowDataArray[idxMap.date]?.trim() : "";
-        let rawMonth =
-          idxMap.month !== -1 ? rowDataArray[idxMap.month]?.trim() : "";
-
-        let monthKey = "";
-        if (rawMonth) {
-          const rawText = rawMonth.toString().trim().toLowerCase();
-          let mStr = "";
-          let yStr = "";
-
-          const mMap: Record<string, string> = {
-            jan: "01",
-            feb: "02",
-            mar: "03",
-            apr: "04",
-            may: "05",
-            jun: "06",
-            jul: "07",
-            aug: "08",
-            sep: "09",
-            oct: "10",
-            nov: "11",
-            dec: "12",
-            "ม.ค.": "01",
-            "ก.พ.": "02",
-            "มี.ค.": "03",
-            "เม.ย.": "04",
-            "พ.ค.": "05",
-            "มิ.ย.": "06",
-            "ก.ค.": "07",
-            "ส.ค.": "08",
-            "ก.ย.": "09",
-            "ต.ค.": "10",
-            "พ.ย.": "11",
-            "ธ.ค.": "12",
+            return headers.findIndex((h) => {
+              const headerLower = h.toLowerCase().replace(/[^a-z0-9ก-๙]/g, "");
+              return possibleHeaders.some((ph) => {
+                const searchLower = ph
+                  .toLowerCase()
+                  .replace(/[^a-z0-9ก-๙]/g, "");
+                if (searchLower === "age" && headerLower.includes("damaged"))
+                  return false;
+                return headerLower.includes(searchLower);
+              });
+            });
           };
 
-          const entries = Object.entries(mMap);
-          for (let mIdx = 0; mIdx < entries.length; mIdx++) {
-            if (rawText.includes(entries[mIdx][0])) {
-              mStr = entries[mIdx][1];
-              break;
+          const idxMap = {
+            date: getColIndex([
+              "Create Date",
+              "Created Date",
+              "Date",
+              "วันที่",
+              "Create",
+            ]),
+            month: getColIndex(["Month", "เดือน"]),
+            ticketNo: getColIndex([
+              "Ticket Number",
+              "Ticket No",
+              "เลขที่ใบงาน",
+              "Ticket",
+              "เลขที่",
+            ]),
+            branchId: getColIndex([
+              "Store Code",
+              "Branch ID",
+              "รหัสสาขา",
+              "Store ID",
+              "รหัส",
+            ]),
+            branchName: getColIndex([
+              "Store Name",
+              "Branch Name",
+              "ชื่อสาขา",
+              "ชื่อ",
+            ]),
+            area: getColIndex(["Area", "เขต"]),
+            team: getColIndex(["Team", "ทีม"]),
+            equipment: getColIndex(["Equipment", "อุปกรณ์", "ชื่ออุปกรณ์"]),
+            productType: getColIndex([
+              "Product Type",
+              "Product",
+              "ประเภทอุปกรณ์",
+              "ประเภท",
+            ]),
+            system: getColIndex(["System", "ระบบ"]),
+            problemType: getColIndex([
+              "Problem Type",
+              "Problem",
+              "อาการเสีย",
+              "อาการ",
+            ]),
+            damagedParts: getColIndex([
+              "Damaged Parts",
+              "Damaged Part",
+              "ชิ้นส่วนที่เสียหาย",
+              "ชิ้นส่วน",
+            ]),
+            cause: getColIndex(["Cause", "สาเหตุ"]),
+            equipmentAge: getColIndex([
+              "อายุอุปกรณ์",
+              "Equipment Age",
+              "Age",
+              "อายุ",
+            ]),
+            repeatCall: getColIndex(["Call ซ่อมซ้ำ", "ซ่อมซ้ำ", "Repeat Call"]),
+          };
+
+          const rowsData = rows.slice(1);
+          const totalRows = rowsData.length;
+          const currentYear = new Date().getFullYear();
+
+          // ✅ ระบบ Memory Caching สำหรับวันที่ ช่วยลดภาระ CPU มหาศาลบนมือถือ
+          const monthCache = new Map<string, string>();
+          const dateCache = new Map<string, string>();
+
+          for (let index = 0; index < totalRows; index++) {
+            const rowDataArray = rowsData[index];
+            if (!rowDataArray || rowDataArray.length < 3) continue;
+
+            const dateVal =
+              idxMap.date !== -1 ? rowDataArray[idxMap.date]?.trim() : "";
+            let rawMonth =
+              idxMap.month !== -1 ? rowDataArray[idxMap.month]?.trim() : "";
+
+            let monthKey = "";
+            if (rawMonth) {
+              const cacheKey = rawMonth.trim().toLowerCase();
+              if (monthCache.has(cacheKey)) {
+                monthKey = monthCache.get(cacheKey)!;
+              } else {
+                let mStr = "";
+                let yStr = "";
+
+                const mMap: Record<string, string> = {
+                  jan: "01",
+                  feb: "02",
+                  mar: "03",
+                  apr: "04",
+                  may: "05",
+                  jun: "06",
+                  jul: "07",
+                  aug: "08",
+                  sep: "09",
+                  oct: "10",
+                  nov: "11",
+                  dec: "12",
+                  "ม.ค.": "01",
+                  "ก.พ.": "02",
+                  "มี.ค.": "03",
+                  "เม.ย.": "04",
+                  "พ.ค.": "05",
+                  "มิ.ย.": "06",
+                  "ก.ค.": "07",
+                  "ส.ค.": "08",
+                  "ก.ย.": "09",
+                  "ต.ค.": "10",
+                  "พ.ย.": "11",
+                  "ธ.ค.": "12",
+                };
+
+                const entries = Object.entries(mMap);
+                for (let mIdx = 0; mIdx < entries.length; mIdx++) {
+                  if (cacheKey.includes(entries[mIdx][0])) {
+                    mStr = entries[mIdx][1];
+                    break;
+                  }
+                }
+
+                const yMatch = cacheKey.match(
+                  /\b(202\d|203\d|25|26|27|68|69)\b/
+                );
+                if (yMatch) {
+                  let y = yMatch[0];
+                  if (y.length === 2) {
+                    yStr =
+                      parseInt(y) > 50 ? `20${parseInt(y) - 43}` : `20${y}`;
+                  } else {
+                    yStr = y;
+                  }
+                }
+
+                if (!mStr) {
+                  const numMatch = cacheKey.match(/^(\d{1,2})[-/](\d{2,4})/);
+                  if (numMatch) {
+                    mStr = numMatch[1].padStart(2, "0");
+                    let y = numMatch[2];
+                    yStr = y.length === 2 ? `20${y}` : y;
+                  }
+                }
+
+                if (mStr) {
+                  if (!yStr) {
+                    yStr =
+                      parseInt(mStr) >= 9
+                        ? String(currentYear - 1)
+                        : String(currentYear);
+                  }
+                  if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
+                    yStr = String(currentYear - 1);
+                  }
+                  monthKey = `${yStr}-${mStr}`;
+                }
+                monthCache.set(cacheKey, monthKey);
+              }
             }
+
+            if (!monthKey && dateVal) {
+              if (dateCache.has(dateVal)) {
+                monthKey = dateCache.get(dateVal)!;
+              } else {
+                const timestamp = parseDateToTimestamp(dateVal);
+                if (timestamp > 0) {
+                  const d = new Date(timestamp);
+                  const mStr = (d.getMonth() + 1).toString().padStart(2, "0");
+                  let yStr = d.getFullYear().toString();
+                  if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
+                    yStr = String(currentYear - 1);
+                  }
+                  monthKey = `${yStr}-${mStr}`;
+                }
+                dateCache.set(dateVal, monthKey);
+              }
+            }
+
+            if (!monthKey) continue;
+            mSet.add(monthKey);
+
+            const ticketNo =
+              idxMap.ticketNo !== -1
+                ? rowDataArray[idxMap.ticketNo]?.trim()
+                : "";
+            if (!ticketNo) continue;
+
+            formatted.push({
+              ticket_no: ticketNo,
+              date: dateVal,
+              branch_id:
+                idxMap.branchId !== -1
+                  ? rowDataArray[idxMap.branchId]?.trim()
+                  : "",
+              branch_name:
+                idxMap.branchName !== -1
+                  ? rowDataArray[idxMap.branchName]?.trim()
+                  : "",
+              area: idxMap.area !== -1 ? rowDataArray[idxMap.area]?.trim() : "",
+              team: idxMap.team !== -1 ? rowDataArray[idxMap.team]?.trim() : "",
+              equipment:
+                idxMap.equipment !== -1
+                  ? rowDataArray[idxMap.equipment]?.trim()
+                  : "",
+              product_type:
+                idxMap.productType !== -1
+                  ? rowDataArray[idxMap.productType]?.trim()
+                  : "",
+              system:
+                idxMap.system !== -1 ? rowDataArray[idxMap.system]?.trim() : "",
+              problem_type:
+                idxMap.problemType !== -1
+                  ? rowDataArray[idxMap.problemType]?.trim()
+                  : "",
+              damaged_parts:
+                idxMap.damagedParts !== -1
+                  ? rowDataArray[idxMap.damagedParts]?.trim()
+                  : "",
+              cause:
+                idxMap.cause !== -1 ? rowDataArray[idxMap.cause]?.trim() : "",
+              equipment_age:
+                idxMap.equipmentAge !== -1
+                  ? rowDataArray[idxMap.equipmentAge]?.trim()
+                  : "",
+              repeat_call:
+                idxMap.repeatCall !== -1
+                  ? rowDataArray[idxMap.repeatCall]?.trim()
+                  : "",
+              month: monthKey,
+            });
           }
 
-          const yMatch = rawText.match(/\b(202\d|203\d|25|26|27|68|69)\b/);
-          if (yMatch) {
-            let y = yMatch[0];
-            if (y.length === 2) {
-              yStr = parseInt(y) > 50 ? `20${parseInt(y) - 43}` : `20${y}`;
-            } else {
-              yStr = y;
-            }
-          }
-
-          if (!mStr) {
-            const numMatch = rawText.match(/^(\d{1,2})[-/](\d{2,4})/);
-            if (numMatch) {
-              mStr = numMatch[1].padStart(2, "0");
-              let y = numMatch[2];
-              yStr = y.length === 2 ? `20${y}` : y;
-            }
-          }
-
-          if (mStr) {
-            // FIX 5: ใช้ currentYear แบบ dynamic
-            if (!yStr) {
-              yStr =
-                parseInt(mStr) >= 9
-                  ? String(currentYear - 1)
-                  : String(currentYear);
-            }
-            if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
-              yStr = String(currentYear - 1);
-            }
-            monthKey = `${yStr}-${mStr}`;
-          }
+          const sortedMonths = Array.from(mSet).sort();
+          setMonths(sortedMonths);
+          setCurrentMonthIdx(
+            sortedMonths.length > 0 ? sortedMonths.length - 1 : 0
+          );
+          setRawData(formatted);
+          setIsLoading(false);
+        } catch (err: any) {
+          console.error(err);
+          setErrorObj(err.message || "เกิดข้อผิดพลาดในการแปลงข้อมูล");
+          setIsLoading(false);
         }
-
-        if (!monthKey && dateVal) {
-          const timestamp = parseDateToTimestamp(dateVal);
-          if (timestamp > 0) {
-            const d = new Date(timestamp);
-            const mStr = (d.getMonth() + 1).toString().padStart(2, "0");
-            let yStr = d.getFullYear().toString();
-            // FIX 5: ใช้ currentYear แบบ dynamic
-            if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
-              yStr = String(currentYear - 1);
-            }
-            monthKey = `${yStr}-${mStr}`;
-          }
-        }
-
-        if (!monthKey) continue;
-        mSet.add(monthKey);
-
-        const ticketNo =
-          idxMap.ticketNo !== -1 ? rowDataArray[idxMap.ticketNo]?.trim() : "";
-        if (!ticketNo) continue;
-
-        formatted.push({
-          ticket_no: ticketNo,
-          date: dateVal,
-          branch_id:
-            idxMap.branchId !== -1 ? rowDataArray[idxMap.branchId]?.trim() : "",
-          branch_name:
-            idxMap.branchName !== -1
-              ? rowDataArray[idxMap.branchName]?.trim()
-              : "",
-          area: idxMap.area !== -1 ? rowDataArray[idxMap.area]?.trim() : "",
-          team: idxMap.team !== -1 ? rowDataArray[idxMap.team]?.trim() : "",
-          equipment:
-            idxMap.equipment !== -1
-              ? rowDataArray[idxMap.equipment]?.trim()
-              : "",
-          product_type:
-            idxMap.productType !== -1
-              ? rowDataArray[idxMap.productType]?.trim()
-              : "",
-          system:
-            idxMap.system !== -1 ? rowDataArray[idxMap.system]?.trim() : "",
-          problem_type:
-            idxMap.problemType !== -1
-              ? rowDataArray[idxMap.problemType]?.trim()
-              : "",
-          damaged_parts:
-            idxMap.damagedParts !== -1
-              ? rowDataArray[idxMap.damagedParts]?.trim()
-              : "",
-          cause: idxMap.cause !== -1 ? rowDataArray[idxMap.cause]?.trim() : "",
-          equipment_age:
-            idxMap.equipmentAge !== -1
-              ? rowDataArray[idxMap.equipmentAge]?.trim()
-              : "",
-          repeat_call:
-            idxMap.repeatCall !== -1
-              ? rowDataArray[idxMap.repeatCall]?.trim()
-              : "",
-          month: monthKey,
-        });
-      }
-
-      const sortedMonths = Array.from(mSet).sort();
-      setMonths(sortedMonths);
-      setCurrentMonthIdx(sortedMonths.length > 0 ? sortedMonths.length - 1 : 0);
-      setRawData(formatted);
+      }, 50);
     } catch (err: any) {
       console.error(err);
-      setErrorObj(err.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
-    } finally {
+      setErrorObj(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อข้อมูล");
       setIsLoading(false);
     }
   }, [selectedSource]);
 
   useEffect(() => {
+    if (!isSystemReady) return; // รอให้ Tailwind โหลดเสร็จค่อยสั่ง Fetch
     setFilters({
       area: ["ALL"],
       team: ["ALL"],
@@ -843,7 +885,7 @@ export default function App() {
     setSelectedSortMonths([]);
     setSortConfig({ key: "rank", direction: "asc" });
     fetchCloudData();
-  }, [selectedSource, fetchCloudData]);
+  }, [selectedSource, fetchCloudData, isSystemReady]);
 
   const handleExportCSV = () => {
     if (!rawData.length) return;
@@ -876,7 +918,7 @@ export default function App() {
       "Repeat Call",
       "Month",
     ];
-    // FIX 4: ใช้ (field || '') ก่อน .replace() เพื่อป้องกัน null/undefined ใน CSV
+
     const csvRows = filteredData.map((d) =>
       [
         `"${d.ticket_no}"`,
@@ -1041,9 +1083,6 @@ export default function App() {
           area: b.area,
           team: b.team,
           rank: cumulativeRanks[b.id] || 0,
-          // FIX 7: กลับทิศ movement — บวก = ได้อันดับแย่ลง (ซ่อมมากขึ้น), ลบ = ดีขึ้น
-          // pRank=5, cRank=2 → movement = 2-5 = -3 (ดีขึ้น 3 อันดับ ✅)
-          // pRank=2, cRank=5 → movement = 5-2 = +3 (แย่ลง 3 อันดับ ✅)
           movement: cRank > 0 && pRank > 0 ? cRank - pRank : 0,
           max_age: b.max_age,
           total_calls: b.allCalls.length,
@@ -1115,7 +1154,6 @@ export default function App() {
   }, []);
 
   const sortedTableData = useMemo(() => {
-    // FIX 7 (tip): ใช้ BranchTableItem แทน any
     let sortable: BranchTableItem[] = [...viewData.table];
     if (sortConfig.key) {
       sortable.sort((a: BranchTableItem, b: BranchTableItem) => {
@@ -1311,26 +1349,55 @@ export default function App() {
     };
   };
 
-  // FIX 6: เรียก getModalSummary ครั้งเดียว แล้วนำผลไปใช้ใน JSX
   const modalSummary = useMemo(
     () =>
       selectedCallDetails ? getModalSummary(selectedCallDetails.calls) : null,
     [selectedCallDetails]
   );
 
+  // ✅ ถ้าสไตล์ยังโหลดไม่เสร็จ ให้แสดงหน้าต่าง Loading แทน เพื่อหลีกเลี่ยงหน้าเว็บพัง
+  if (!isSystemReady) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "#f8fafc",
+          fontFamily: "sans-serif",
+        }}
+      >
+        <div
+          style={{
+            padding: "30px",
+            backgroundColor: "white",
+            borderRadius: "20px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+            textAlign: "center",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "20px",
+              fontWeight: "bold",
+              color: "#0f172a",
+              marginBottom: "10px",
+            }}
+          >
+            Loading Dashboard...
+          </h2>
+          <p style={{ fontSize: "14px", color: "#64748b" }}>
+            กำลังเตรียมระบบแสดงผล กรุณารอสักครู่
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
-      {/* FIX 3: เก็บ <style> ไว้แค่จุดเดียวใน JSX — ลบออกจาก top-level script แล้ว */}
-      <style>{`
-        body { font-family: 'Sarabun', 'Inter', sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      `}</style>
-
       <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-10 border-b border-slate-200 pb-10">
         <div className="flex flex-col gap-4">
           <div className="relative z-50 self-start">
@@ -1410,7 +1477,6 @@ export default function App() {
                 <Loader2 size={12} className="animate-spin" /> SYNCING...
               </span>
             ) : (
-              // FIX 1: แก้ text-red-655 → text-red-600
               <span className="text-red-600 font-black">
                 {rawData.length.toLocaleString()} TOTAL CALLS
               </span>
@@ -1590,7 +1656,6 @@ export default function App() {
             </div>
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
-                {/* FIX 1: แก้ text-red-655 → text-red-600 */}
                 <h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
                   <Settings size={16} /> Top Systems (ระบบที่เสียรวม)
                 </h3>
@@ -1680,7 +1745,6 @@ export default function App() {
                     </div>
                     <div className="text-[10px] text-indigo-700 mt-1">
                       คำนวณจากเคสซ่อมรวมของเดือน:{" "}
-                      {/* FIX 1: แก้ text-red-655 → text-red-600 */}
                       <span className="text-red-600 font-bold">
                         {selectedSortMonths
                           .map((m) => formatMonthLabel(m))
@@ -1872,7 +1936,6 @@ export default function App() {
                             </td>
                             <td className="p-6 text-center">
                               <div className="flex justify-center">
-                                {/* FIX 7: movement > 0 = ซ่อมมากขึ้น = แย่ลง = แสดงสีแดง TrendingUp */}
                                 {row.movement > 0 ? (
                                   <div className="text-red-600 bg-red-50 px-2 py-1 rounded-full text-[8px] font-black flex items-center gap-1">
                                     <TrendingUp size={12} />+{row.movement}
@@ -2110,7 +2173,6 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-auto p-8 custom-scrollbar space-y-8 bg-slate-50">
-              {/* FIX 6: ใช้ modalSummary ที่ memoize แล้ว แทนการเรียก getModalSummary() 4 ครั้ง */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* 1. ALL PRODUCT TYPES Card */}
                 <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
@@ -2165,7 +2227,6 @@ export default function App() {
 
                 {/* 2. ALL SYSTEMS Card */}
                 <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col max-h-[200px]">
-                  {/* FIX 1: แก้ text-red-655 → text-red-600 */}
                   <h4 className="text-[10px] font-black text-red-600 uppercase mb-3 flex items-center gap-2 tracking-widest sticky top-0 bg-white py-1">
                     <Settings size={14} /> ALL SYSTEMS
                   </h4>
@@ -2197,7 +2258,6 @@ export default function App() {
                             >
                               {pct}%
                             </span>
-                            {/* FIX 1: แก้ text-red-655 → text-red-600 */}
                             <span
                               className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                 isFiltered
@@ -2249,7 +2309,6 @@ export default function App() {
                             >
                               {pct}%
                             </span>
-                            {/* FIX 1: แก้ text-orange-605 → text-orange-600 */}
                             <span
                               className={`text-[10px] font-black px-2 rounded-full min-w-[24px] text-center ${
                                 isFiltered
