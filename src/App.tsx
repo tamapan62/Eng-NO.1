@@ -41,6 +41,9 @@ import {
   FileSpreadsheet,
   Database,
   FileWarning,
+  CalendarDays,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 // ==========================================
@@ -430,6 +433,25 @@ const MultiSearchSelect: React.FC<MultiSearchSelectProps> = React.memo(
 // ==========================================
 export default function App() {
   const [isSystemReady, setIsSystemReady] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const savedTheme = window.localStorage.getItem("maintenance-dashboard-theme");
+      if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    } catch {
+      return "light";
+    }
+  });
+  const isDarkTheme = theme === "dark";
+
+  useEffect(() => {
+    document.documentElement.style.colorScheme = theme;
+    try {
+      window.localStorage.setItem("maintenance-dashboard-theme", theme);
+    } catch {}
+  }, [theme]);
 
   // ✅ ระบบ Pre-loader ตรวจสอบว่า Tailwind CSS และฟอนต์โหลดเสร็จสมบูรณ์หรือยัง ป้องกันหน้าเว็บพัง
   useEffect(() => {
@@ -468,6 +490,36 @@ export default function App() {
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ef4444; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       .animate-modal { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .dark-dashboard { background: #0b1120 !important; color: #e2e8f0; }
+      .dark-dashboard .bg-white { background-color: #162033 !important; }
+      .dark-dashboard .bg-slate-50 { background-color: #0f172a !important; }
+      .dark-dashboard .bg-slate-100 { background-color: #1e293b !important; }
+      .dark-dashboard .bg-slate-200 { background-color: #334155 !important; }
+      .dark-dashboard .bg-indigo-50 { background-color: #1e1b4b !important; }
+      .dark-dashboard .bg-blue-50 { background-color: #172554 !important; }
+      .dark-dashboard .bg-red-50 { background-color: #450a0a !important; }
+      .dark-dashboard .bg-orange-50 { background-color: #431407 !important; }
+      .dark-dashboard .bg-gradient-to-br { background-image: none !important; background-color: #162033 !important; }
+      .dark-dashboard .border-slate-100,
+      .dark-dashboard .border-slate-200,
+      .dark-dashboard .border-slate-300 { border-color: #334155 !important; }
+      .dark-dashboard .border-indigo-100,
+      .dark-dashboard .border-indigo-200 { border-color: #3730a3 !important; }
+      .dark-dashboard .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
+      .dark-dashboard .text-slate-900,
+      .dark-dashboard .text-slate-800,
+      .dark-dashboard .text-slate-700 { color: #e2e8f0 !important; }
+      .dark-dashboard .text-slate-600,
+      .dark-dashboard .text-slate-500,
+      .dark-dashboard .text-slate-400 { color: #94a3b8 !important; }
+      .dark-dashboard .hover\\:bg-slate-50:hover,
+      .dark-dashboard .hover\\:bg-slate-100:hover,
+      .dark-dashboard .hover\\:bg-slate-200:hover { background-color: #29364a !important; }
+      .dark-dashboard .shadow-sm,
+      .dark-dashboard .shadow-md,
+      .dark-dashboard .shadow-xl,
+      .dark-dashboard .shadow-2xl { box-shadow: 0 12px 28px rgba(0, 0, 0, .32) !important; }
+      .dark-dashboard .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
     `;
     document.head.appendChild(style);
   }, []);
@@ -500,6 +552,7 @@ export default function App() {
 
   const [rawData, setRawData] = useState<DataItem[]>([]);
   const [months, setMonths] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>("ALL");
   const [currentMonthIdx, setCurrentMonthIdx] = useState(0);
   const [filters, setFilters] = useState<{
     area: string[];
@@ -542,9 +595,27 @@ export default function App() {
     value: null,
   });
 
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    months.forEach((month) => {
+      const [year] = month.split("-");
+      if (year) years.add(year);
+    });
+    return Array.from(years).sort();
+  }, [months]);
+
+  const activeMonths = useMemo(() => {
+    if (selectedYear === "ALL") return months;
+    return months.filter((month) => month.startsWith(selectedYear));
+  }, [months, selectedYear]);
+
+  useEffect(() => {
+    setCurrentMonthIdx(activeMonths.length > 0 ? activeMonths.length - 1 : 0);
+  }, [selectedYear, activeMonths]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, sortConfig, currentMonthIdx, selectedSortMonths]);
+  }, [filters, sortConfig, currentMonthIdx, selectedSortMonths, selectedYear]);
 
   const fetchCloudData = useCallback(async () => {
     setIsLoading(true);
@@ -767,13 +838,7 @@ export default function App() {
 
                 if (mStr) {
                   if (!yStr) {
-                    yStr =
-                      parseInt(mStr) >= 9
-                        ? String(currentYear - 1)
-                        : String(currentYear);
-                  }
-                  if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
-                    yStr = String(currentYear - 1);
+                    yStr = String(currentYear);
                   }
                   monthKey = `${yStr}-${mStr}`;
                 }
@@ -790,9 +855,6 @@ export default function App() {
                   const d = new Date(timestamp);
                   const mStr = (d.getMonth() + 1).toString().padStart(2, "0");
                   let yStr = d.getFullYear().toString();
-                  if (parseInt(mStr) >= 9 && yStr === String(currentYear)) {
-                    yStr = String(currentYear - 1);
-                  }
                   monthKey = `${yStr}-${mStr}`;
                 }
                 dateCache.set(dateVal, monthKey);
@@ -882,6 +944,7 @@ export default function App() {
       productType: ["ALL"],
       system: ["ALL"],
     });
+    setSelectedYear("ALL");
     setSelectedSortMonths([]);
     setSortConfig({ key: "rank", direction: "asc" });
     fetchCloudData();
@@ -892,6 +955,7 @@ export default function App() {
 
     const filteredData = rawData.filter(
       (d) =>
+        (selectedYear === "ALL" || d.month.startsWith(selectedYear)) &&
         (filters.area.includes("ALL") || filters.area.includes(d.area)) &&
         (filters.team.includes("ALL") || filters.team.includes(d.team)) &&
         (filters.branch.includes("ALL") ||
@@ -946,7 +1010,9 @@ export default function App() {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `maintenance_league_export_${new Date().toISOString().split("T")[0]}.csv`
+      `maintenance_league_export_${selectedYear}_${
+        new Date().toISOString().split("T")[0]
+      }.csv`
     );
     document.body.appendChild(link);
     link.click();
@@ -961,6 +1027,8 @@ export default function App() {
       systems = new Set<string>();
 
     rawData.forEach((d) => {
+      if (selectedYear !== "ALL" && !d.month.startsWith(selectedYear)) return;
+
       if (d.area) areas.add(d.area);
       if (d.team) teams.add(d.team);
       if (d.product_type) productTypes.add(d.product_type);
@@ -983,10 +1051,10 @@ export default function App() {
         .map(([id, name]) => ({ id, label: `${id} - ${name}` }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     };
-  }, [rawData, filters.area, filters.team]);
+  }, [rawData, filters.area, filters.team, selectedYear]);
 
   const viewData = useMemo(() => {
-    if (!rawData.length || !months.length)
+    if (!rawData.length || !activeMonths.length)
       return { table: [], charts: { prod: [], sys: [] } };
 
     interface bStatsType {
@@ -1003,6 +1071,7 @@ export default function App() {
 
     const filteredForCalc = rawData.filter(
       (d) =>
+        (selectedYear === "ALL" || d.month.startsWith(selectedYear)) &&
         (filters.area.includes("ALL") || filters.area.includes(d.area)) &&
         (filters.team.includes("ALL") || filters.team.includes(d.team)) &&
         (filters.productType.includes("ALL") ||
@@ -1036,12 +1105,13 @@ export default function App() {
       if (!branchObj.name && d.branch_name) branchObj.name = d.branch_name;
     });
 
-    const currentMonthKey = months[currentMonthIdx];
+    const currentMonthKey = activeMonths[currentMonthIdx];
     const prevMonthIdx = currentMonthIdx > 0 ? currentMonthIdx - 1 : -1;
-    const prevMonthKey = prevMonthIdx !== -1 ? months[prevMonthIdx] : null;
+    const prevMonthKey =
+      prevMonthIdx !== -1 ? activeMonths[prevMonthIdx] : null;
 
     const monthlyRanksMap: Record<string, Record<string, number>> = {};
-    months.forEach((m) => {
+    activeMonths.forEach((m) => {
       const scores = Array.from(bStats.values()).map((b) => ({
         id: b.id,
         count: b.monthlyCounts[m] || 0,
@@ -1086,7 +1156,7 @@ export default function App() {
           movement: cRank > 0 && pRank > 0 ? cRank - pRank : 0,
           max_age: b.max_age,
           total_calls: b.allCalls.length,
-          history: months.map((m) => ({
+          history: activeMonths.map((m) => ({
             month: m,
             count: b.monthlyCounts[m] || 0,
             rank: monthlyRanksMap[m]?.[b.id] || 0,
@@ -1134,7 +1204,7 @@ export default function App() {
         sys: chartData(sysCount, totalSys),
       },
     };
-  }, [rawData, months, currentMonthIdx, filters]);
+  }, [rawData, activeMonths, currentMonthIdx, filters, selectedYear]);
 
   const handleToggleSortMonth = useCallback((monthKey: string) => {
     setSelectedSortMonths((prev) => {
@@ -1176,7 +1246,7 @@ export default function App() {
         } else if (sortConfig.key === "max_age") {
           valA = a.max_age;
           valB = b.max_age;
-        } else if (months.includes(sortConfig.key)) {
+        } else if (activeMonths.includes(sortConfig.key)) {
           valA =
             a.history.find((h: MonthHistory) => h.month === sortConfig.key)
               ?.count || 0;
@@ -1202,7 +1272,7 @@ export default function App() {
       });
     }
     return sortable;
-  }, [viewData.table, sortConfig, months, selectedSortMonths]);
+  }, [viewData.table, sortConfig, activeMonths, selectedSortMonths]);
 
   const sortedModalCalls = useMemo(() => {
     if (!selectedCallDetails) return [];
@@ -1397,7 +1467,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
+    <div className={`min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden transition-colors duration-300 ${isDarkTheme ? "dark-dashboard" : ""}`}>
       <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-10 border-b border-slate-200 pb-10">
         <div className="flex flex-col gap-4">
           <div className="relative z-50 self-start">
@@ -1472,13 +1542,24 @@ export default function App() {
             <span className="bg-slate-200 px-3 py-1 rounded-full border border-slate-300">
               PERFORMANCE
             </span>
+            {selectedYear !== "ALL" && (
+              <span className="bg-indigo-600 text-white px-3 py-1 rounded-full font-black border border-indigo-400">
+                ปี {selectedYear}
+              </span>
+            )}
             {isLoading ? (
               <span className="flex items-center gap-2 animate-pulse text-indigo-600">
                 <Loader2 size={12} className="animate-spin" /> SYNCING...
               </span>
             ) : (
               <span className="text-red-600 font-black">
-                {rawData.length.toLocaleString()} TOTAL CALLS
+                {rawData
+                  .filter(
+                    (d) =>
+                      selectedYear === "ALL" ||
+                      d.month.startsWith(selectedYear)
+                  )
+                  .length.toLocaleString()} TOTAL CALLS
               </span>
             )}
           </div>
@@ -1544,6 +1625,42 @@ export default function App() {
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Filter size={14} className="text-red-500" /> Filter Engine
             </h3>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-600 uppercase ml-1 flex items-center gap-1">
+                <CalendarDays size={10} className="text-indigo-600" /> Select Year (เลือกปี)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedYear("ALL");
+                    setSelectedSortMonths([]);
+                  }}
+                  className={`p-2.5 text-xs font-bold rounded-xl border transition-all text-center ${
+                    selectedYear === "ALL"
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-md font-black"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  รวมทุกปี
+                </button>
+                {availableYears.map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => {
+                      setSelectedYear(year);
+                      setSelectedSortMonths([]);
+                    }}
+                    className={`p-2.5 text-xs font-bold rounded-xl border transition-all text-center ${
+                      selectedYear === year
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md font-black"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    ปี {year}
+                  </button>
+                ))}
+              </div>
+            </div>
             <MultiSearchSelect
               label="Area (เขต)"
               options={options.areas}
@@ -1594,6 +1711,7 @@ export default function App() {
                   productType: ["ALL"],
                   system: ["ALL"],
                 });
+                setSelectedYear("ALL");
                 setSelectedSortMonths([]);
                 setSortConfig({ key: "rank", direction: "asc" });
               }}
@@ -1609,10 +1727,10 @@ export default function App() {
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
                 <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
-                  <Box size={16} /> Top Product (งานรวมทุกเดือน)
+                  <Box size={16} /> Top Product (งานรวม{selectedYear === "ALL" ? "ทุกปี" : `ปี ${selectedYear}`})
                 </h3>
                 <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 font-black">
-                  ALL DATA
+                  {selectedYear === "ALL" ? "ALL YEARS" : `YEAR ${selectedYear}`}
                 </span>
               </div>
               <ResponsiveContainer width="100%" height={150}>
@@ -1657,10 +1775,10 @@ export default function App() {
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] h-60 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center">
                 <h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
-                  <Settings size={16} /> Top Systems (ระบบที่เสียรวม)
+                  <Settings size={16} /> Top Systems (ระบบที่เสียรวม{selectedYear === "ALL" ? "ทุกปี" : `ปี ${selectedYear}`})
                 </h3>
                 <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-200 font-black">
-                  ALL DATA
+                  {selectedYear === "ALL" ? "ALL YEARS" : `YEAR ${selectedYear}`}
                 </span>
               </div>
               <ResponsiveContainer width="100%" height={150}>
@@ -1704,32 +1822,79 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-6 rounded-[2rem] flex flex-col justify-center shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-[10px] font-black uppercase text-indigo-800 flex items-center gap-2">
-                <Calendar size={14} /> TABLE VIEW PERIOD
-                (เลือกเดือนเพื่อดูอันดับในตาราง)
-              </h3>
-              <span className="bg-indigo-600 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-lg border border-indigo-400/30 uppercase tracking-widest">
-                {formatMonthLabel(months[currentMonthIdx])}
+          <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-6 rounded-[2rem] flex flex-col justify-center shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[10px] font-black uppercase text-indigo-800 flex items-center gap-2">
+                  <Calendar size={14} /> TABLE VIEW PERIOD
+                </h3>
+                <div className="flex items-center gap-1.5 ml-2 overflow-x-auto custom-scrollbar max-w-[300px] md:max-w-none pb-1 md:pb-0">
+                  <button
+                    onClick={() => {
+                      setSelectedYear("ALL");
+                      setSelectedSortMonths([]);
+                    }}
+                    className={`px-2.5 py-1 text-[10px] font-black rounded-lg transition-all ${
+                      selectedYear === "ALL"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                    }`}
+                  >
+                    ทุกปี
+                  </button>
+                  {availableYears.map((year) => (
+                    <button
+                      key={year}
+                      onClick={() => {
+                        setSelectedYear(year);
+                        setSelectedSortMonths([]);
+                      }}
+                      className={`px-2.5 py-1 text-[10px] font-black rounded-lg transition-all ${
+                        selectedYear === year
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      }`}
+                    >
+                      ปี {year}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <span className="bg-indigo-600 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-lg border border-indigo-400/30 uppercase tracking-widest self-end md:self-auto">
+                {activeMonths.length > 0
+                  ? formatMonthLabel(activeMonths[currentMonthIdx])
+                  : "-"}
               </span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max={months.length > 0 ? months.length - 1 : 0}
-              value={currentMonthIdx}
-              onChange={(e) => setCurrentMonthIdx(parseInt(e.target.value))}
-              className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 border border-slate-300"
-            />
-            <div className="flex justify-between mt-3 px-1">
-              <span className="text-[9px] font-black text-slate-600 uppercase">
-                {formatMonthLabel(months[0])}
-              </span>
-              <span className="text-[9px] font-black text-slate-600 uppercase">
-                {formatMonthLabel(months[months.length - 1])}
-              </span>
-            </div>
+            {activeMonths.length > 0 && (
+              <>
+                <input
+                  type="range"
+                  min="0"
+                  max={activeMonths.length - 1}
+                  value={currentMonthIdx}
+                  onChange={(e) => setCurrentMonthIdx(parseInt(e.target.value))}
+                  className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 border border-slate-300"
+                />
+                <div className="flex justify-between px-1">
+                  <span className="text-[9px] font-black text-slate-600 uppercase">
+                    {formatMonthLabel(activeMonths[0])}
+                  </span>
+                  <span className="text-[9px] font-black text-slate-600 uppercase">
+                    {formatMonthLabel(activeMonths[activeMonths.length - 1])}
+                  </span>
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setTheme(isDarkTheme ? "light" : "dark")}
+              aria-label={isDarkTheme ? "เปลี่ยนเป็นโหมดกลางวัน" : "เปลี่ยนเป็นโหมดกลางคืน"}
+              title={isDarkTheme ? "โหมดกลางวัน" : "โหมดกลางคืน"}
+              className="ml-3 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-indigo-600 shadow-md transition-all hover:scale-105 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              {isDarkTheme ? <Sun size={21} /> : <Moon size={21} />}
+            </button>
           </div>
 
           <div className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
@@ -1841,22 +2006,24 @@ export default function App() {
                         BRANCH INFO {getSortIcon("branch_name")}
                       </div>
                     </th>
-                    {months.map((m) => {
+                    {activeMonths.map((m) => {
                       const isMonthInMultiSort = selectedSortMonths.includes(m);
+                      const [year] = m.split("-");
                       return (
                         <th
                           key={m}
                           className={`p-3 text-center transition-all cursor-pointer relative group/th ${
                             isMonthInMultiSort
                               ? "text-indigo-800 bg-indigo-100 border-x border-indigo-200"
-                              : m === months[currentMonthIdx]
+                              : m === activeMonths[currentMonthIdx]
                               ? "text-red-600 bg-red-50"
                               : "hover:bg-slate-100 text-slate-700"
                           }`}
                           onClick={() => handleToggleSortMonth(m)}
                         >
-                          <div className="flex flex-col items-center justify-center gap-1">
-                            {formatMonthLabel(m).split(" ")[0]}
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span className="font-black">{formatMonthLabel(m).split(" ")[0]}</span>
+                            <span className="text-[8px] opacity-75 font-bold text-slate-500">{year ? `'${year.slice(2)}` : ""}</span>
                             {isMonthInMultiSort ? (
                               <div className="flex items-center justify-center bg-indigo-600 text-white rounded-full p-0.5 mt-0.5">
                                 <Check size={8} />
@@ -2043,7 +2210,7 @@ export default function App() {
                                     )} ${
                                       isMonthSelectedInMulti
                                         ? "ring-2 ring-indigo-500 scale-105 shadow-md border-indigo-300"
-                                        : h.month === months[currentMonthIdx]
+                                        : h.month === activeMonths[currentMonthIdx]
                                         ? "ring-2 ring-indigo-600 scale-105 shadow-lg"
                                         : "opacity-75 group-hover:opacity-100 hover:scale-105"
                                     }`}
@@ -2072,7 +2239,7 @@ export default function App() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={months.length + 5}
+                        colSpan={activeMonths.length + 5}
                         className="p-20 text-center text-slate-500 font-bold"
                       >
                         {isLoading ? (
@@ -2084,7 +2251,7 @@ export default function App() {
                             กำลังโหลดข้อมูล...
                           </div>
                         ) : (
-                          "ไม่พบข้อมูล กรุณาตรวจสอบไฟล์ CSV"
+                          "ไม่พบข้อมูลตามเงื่อนไขหรือปีที่เลือก"
                         )}
                       </td>
                     </tr>
@@ -2142,7 +2309,9 @@ export default function App() {
                     </span>
                     <span className="text-red-700 text-[10px] font-black uppercase bg-red-100 px-3 py-1 rounded-full border border-red-200">
                       {selectedCallDetails.isTotal
-                        ? "ทุกช่วงเวลา"
+                        ? selectedYear === "ALL"
+                          ? "ทุกช่วงเวลา"
+                          : `รวมปี ${selectedYear}`
                         : formatMonthLabel(selectedCallDetails.month)}
                     </span>
                     {modalActiveFilter.type && (
