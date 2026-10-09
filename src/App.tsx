@@ -543,7 +543,7 @@ export default function App() {
       },
       {
         id: "CHILL",
-        name: "Chill บานเปิด",
+        name: "Chill บานเปิดและบานปิดหน้า-หลัง",
         url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9V2Ls4wyF6KtTCalxFDIJdAOqxQ2KJvuLKwrnUEALKrYP_8iLmbKxRvyFPyBJx-QLUqaZrBODPDhm/pub?output=csv",
       },
     ],
