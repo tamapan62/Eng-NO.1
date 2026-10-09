@@ -541,6 +541,11 @@ export default function App() {
         name: "E3 All Cafe",
         url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT33wSp7Lhy8iyCajYO5cVhWWKEIKBy4gRIp0YnkSB0szsA-e1ZwxJh7uCWz-rw5UlYqjlFtI4JV_mb/pub?output=csv",
       },
+      {
+        id: "CHILL",
+        name: "Chill บานเปิด",
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9V2Ls4wyF6KtTCalxFDIJdAOqxQ2KJvuLKwrnUEALKrYP_8iLmbKxRvyFPyBJx-QLUqaZrBODPDhm/pub?output=csv",
+      },
     ],
     []
   );
