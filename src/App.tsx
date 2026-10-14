@@ -543,7 +543,7 @@ export default function App() {
       },
       {
         id: "CHILL",
-        name: "Chill บานเปิดและบานปิดหน้า-หลัง",
+        name: "Chill บานเปิด",
         url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9V2Ls4wyF6KtTCalxFDIJdAOqxQ2KJvuLKwrnUEALKrYP_8iLmbKxRvyFPyBJx-QLUqaZrBODPDhm/pub?output=csv",
       },
     ],
@@ -1230,6 +1230,14 @@ export default function App() {
 
   const sortedTableData = useMemo(() => {
     let sortable: BranchTableItem[] = [...viewData.table];
+    // แสดงเฉพาะสาขาที่มีคอลครบทุกเดือนที่เลือก ไม่ข้ามเดือนที่ไม่มีคอล
+    if (selectedSortMonths.length > 0) {
+      sortable = sortable.filter((branch) =>
+        selectedSortMonths.every((month) =>
+          branch.history.some((history) => history.month === month && history.count > 0)
+        )
+      );
+    }
     if (sortConfig.key) {
       sortable.sort((a: BranchTableItem, b: BranchTableItem) => {
         let valA: number | string = 0;
