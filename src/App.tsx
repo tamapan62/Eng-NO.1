@@ -2229,10 +2229,10 @@ export default function App() {
                                     }`}
                                   >
                                     <div className="text-sm font-black">
-                                      {h.rank > 0 ? h.rank : "-"}
+                                      {h.count > 0 ? h.count : "-"}
                                     </div>
                                     <div className="text-[9px] font-bold opacity-90">
-                                      ({h.count})
+                                      ({h.rank})
                                     </div>
                                   </div>
                                 </td>
